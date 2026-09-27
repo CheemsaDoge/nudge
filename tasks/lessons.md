@@ -1026,3 +1026,56 @@ Second, narrower: a prefix assertion cannot tell a real class from a plausible-l
 contract test fixture listed `"com.astraedus.nudge.ui.overlay.BlockOverlayActivity"`, and renaming
 that activity would have left every assertion in the file green over a class the app no longer
 ships. A fixture full of class names owes one test that each of them names a file that exists.
+
+## The flaky test was never the broken one: a process-global leak (2026-09-27, issue #53)
+
+`InterventionsViewModelTest > a device with no history reads zero` failed on the `v1.18.0` tag build
+with `kotlinx.coroutines.test.UncaughtExceptionsBeforeTest`, on the identical commit that had passed
+the same `./gradlew test lintDebug` step minutes earlier. The job was re-run and the release shipped.
+
+**Nothing in that test, that class, or that ViewModel was wrong.** The name of the exception says so:
+*before test*. The throwable belonged to `CrashSafeScopeTest`, in a different package, and had been
+sitting in a static list since then.
+
+**The mechanism.** `kotlinx-coroutines-test` registers `ExceptionCollector` as a **process-global**
+`CoroutineExceptionHandler` service. The first `runTest` in a fork arms it for the life of that JVM.
+After that, any coroutine exception with no `CoroutineExceptionHandler` in its own context is added
+to its static `unprocessedExceptions` list; if no `runTest` is active there is no callback to hand it
+to, so it just waits. The next `runTest` **anywhere in the fork** flushes that list in
+`TestScope.enter()` and throws `UncaughtExceptionsBeforeTest` at its first line. Which test that is
+depends only on Gradle's class order -- which differs between the debug and release variants (each
+walks its own output directory) and between machines. Hence: release variant only, one run only.
+
+`CrashSafeScopeTest`'s counterfactual is what produced it, and it is not a mistake: its whole claim is
+that a bare `SupervisorJob()` scope lets a throwable reach the thread's default uncaught handler -- the
+path that kills the process and with it the accessibility service. There is no way to demonstrate that
+without the throwable actually travelling the global unhandled path.
+
+**The fix** is therefore not "stop leaking" but "clean up after yourself":
+`LeakedCoroutineExceptions.drain()` (an empty `runTest` that swallows `UncaughtExceptionsBeforeTest`,
+the only public API that touches the queue) runs from `CrashSafeScopeTest`'s `@After`, and the
+counterfactual additionally asserts the drain found something, so it cannot rot into a no-op.
+
+### What generalises
+
+- **A green suite that fails only on one variant, one runner, or one ordering is shared process state
+  until proven otherwise.** The test named in the report is the victim. Do not go looking for the bug
+  inside it; ask what ran *before* it.
+- **The tell is any test that writes state the whole fork shares**: a default uncaught-exception
+  handler, `Dispatchers.setMain`, a system property, a swapped singleton, a thread that outlives the
+  test. Restore it in `@After`, in the class that wrote it. `LeakedCoroutineExceptionsContractTest`
+  pins the coroutine case (a test that installs a default uncaught handler must also drain).
+- **Write the regression test at the altitude the defect lives at.** Both classes pass alone, so no
+  test inside either could ever see this. `GlobalCollectorNotLeakedTest` runs the offender through
+  `JUnitCore` and then asserts the global state it left is clean -- the unit under test is a whole
+  class, because "what one class leaves for the next" is what was broken. It fails before the fix and
+  passes after, with no loop and no luck.
+- **Two wrong hypotheses cost an hour each; one global probe ended it in one run.** "A `viewModelScope`
+  collector outlived its test and resumed on a reset `Dispatchers.Main`" was a good story -- and both
+  candidate ViewModels turned out to shut down cleanly, because `runTest`'s cleanup advances virtual
+  time past `SharingStarted.WhileSubscribed(5000)` and cancels the whole chain. What settled it was
+  registering a temporary `CoroutineExceptionHandler` through
+  `META-INF/services/kotlinx.coroutines.CoroutineExceptionHandler` on the **test** classpath, which
+  prints every uncaught coroutine exception in the fork with its thread and stack. One run, one hit,
+  exact line. **When the question is "who threw this", instrument the global seam before theorising
+  about which of your classes it was.**

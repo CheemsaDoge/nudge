@@ -28,6 +28,7 @@ today, both currently optional, and between them they cover 8 of the 18 defects.
 | the code is right and the shipped data or copy is wrong | **L4** data/asset gate |
 | works on the bench Pixel, crashes on an older phone | **L5** lint |
 | OEM launcher timing, PiP, the service dying overnight | **L6** bench device — confirm here, never discover here |
+| a test fails only on one variant, one runner, or one ordering | not a layer — **rule (f)**: shared process state, and the reported test is the victim |
 
 ---
 
@@ -247,6 +248,33 @@ either an **absence of a whole defect class** (`assertFalse(source.contains("Cor
 set** (exactly one `wasBlocked = true` writer; this set of preferences equals that set). The ones
 that rot check the **presence of a specific spelling**. That is a sharper rule than "source-grep
 tests are bad", and it tells an author which kind to write. Apply it before adding one, not after.
+
+### (f) A test that leaves a PROCESS-GLOBAL side effect cleans it up, in the test that made it
+
+`kotlinx-coroutines-test` registers `ExceptionCollector` as a process-global
+`CoroutineExceptionHandler`. The first `runTest` in a fork arms it for the life of that JVM, and
+from then on any coroutine exception with no handler in its own context is added to a static list.
+While no `runTest` is active nobody takes it, so it waits — and the next `runTest` **anywhere in
+the fork** throws `UncaughtExceptionsBeforeTest` at its first line.
+
+That is what [#53](https://github.com/astraedus/nudge/issues/53) was. `CrashSafeScopeTest`'s
+counterfactual has to let a throwable escape a bare `SupervisorJob()` scope — the claim IS that it
+reaches the process-killing path — and it left that throwable in the queue. The victim was
+`InterventionsViewModelTest`, three packages away, on the release variant only, because Gradle
+walks the test classes in a different order per variant. Re-running the job "fixed" it.
+
+**The shape to recognise, beyond coroutines:** a test that installs a default uncaught-exception
+handler, replaces a `Dispatchers.setMain` delegate, mutates a system property, swaps a singleton,
+or starts a thread that outlives it, has written into state the whole fork shares. Restore it in
+`@After`, in the class that wrote it — `LeakedCoroutineExceptions.drain()` is that cleanup for the
+coroutine case, and `LeakedCoroutineExceptionsContractTest` pins the pairing.
+
+**And write the regression test at the altitude the defect lives at.** Nothing inside either class
+could see this one: both pass alone. `GlobalCollectorNotLeakedTest` runs the offender through
+`JUnitCore` and then asserts the global state it left is clean — a whole class is the unit under
+test, because "what one class leaves for the next" is the thing that was broken. When a green
+suite fails only on one variant, one runner or one ordering, **suspect shared process state before
+suspecting the test that failed**: the reported test is the victim, not the defect.
 
 ---
 
