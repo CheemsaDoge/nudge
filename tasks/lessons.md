@@ -1026,3 +1026,37 @@ Second, narrower: a prefix assertion cannot tell a real class from a plausible-l
 contract test fixture listed `"com.astraedus.nudge.ui.overlay.BlockOverlayActivity"`, and renaming
 that activity would have left every assertion in the file green over a class the app no longer
 ships. A fixture full of class names owes one test that each of them names a file that exists.
+
+## 2026-09-27 -- A package set that answers one question WILL be asked another one (issues #58, #50)
+
+Two lessons out of the overlay launch gate, both the same shape: **the gate was keyed on state that
+was true a moment ago rather than on state that is true now.**
+
+**The grouped-constant trap sprang a FOURTH time, one entry point over from its last fix.**
+`SYSTEM_PACKAGES` exists to answer *should this be evaluated / should the awareness overlays hide*.
+`docs/architecture/foreground-detection.md` records three sprints of it being asked *did the user
+leave* instead, and #28 removed it from that question in `classify`. It was still answering it in
+`classifyVerifiedContentChangeAsSwitch`: the stock launchers are IN that set, so a Home press that
+arrived only as a content change came back `SystemSurface`, was dropped before the active-window
+read, and the sitting never ended. **When a fix removes a constant from one question, grep for every
+OTHER entry point that still asks it.** The two classifier functions had visibly diverged and nobody
+had read them side by side.
+
+**A duplicate-suppression guard must key on WHAT, not just on WHO.** `DROP_ALREADY_PENDING` meant
+"an overlay for this package is in flight", which is only "this launch is a duplicate" while the
+pending record describes the same block. It outlived its overlay once and swallowed the corrected
+decision the user was trying to reach. If a guard refuses work because something equivalent is
+already happening, the equivalence has to be spelled out and compared -- and **nothing that TICKS
+may be in that key**, or the guard stops working entirely (a countdown in the fingerprint would have
+handed back #36's duplicate launches).
+
+**Corollary on drops.** A gate that refuses an action for two different reasons under one verdict
+owes a way to tell them apart. `DROP_FOREGROUND_MOVED` covered both *the user moved on* (nothing
+owed) and *we raced ourselves* (a block owed), and the second was silent because the dropped
+evaluation had already spent the same-package debounce. Fixed as a RULE keyed on the event the race
+was about (the target settling in front), never a retry timer.
+
+**Tooling:** `./gradlew lintDebug` failing with `NoClassDefFoundError` inside a lint DETECTOR
+(`NonNullableMutableLiveDataDetector`) is a stale build cache, not a finding in the diff --
+`rm -rf app/build/intermediates/lint*` and rerun. It appeared only after merging `origin/main` into
+a worktree whose lint model had already been built.
