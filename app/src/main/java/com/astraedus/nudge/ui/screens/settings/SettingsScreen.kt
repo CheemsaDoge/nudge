@@ -215,9 +215,22 @@ fun SettingsScreen(
                 }
             )
 
+            // Off makes it less likely Nudge can restart its own monitor process when Android
+            // kills it in the background — and even granted, this is a "helps", not a guarantee:
+            // Android 16 (API 36) narrowed the overlay exemption that background restarts rely on,
+            // so a granted permission no longer restarts the service on its own on every OS
+            // version (see docs/architecture/service-lifecycle-and-watchdog.md, "Real start paths
+            // for the foreground service"). Opening Nudge always restarts it regardless of Android
+            // version, which is why the not-granted branch below says so rather than claiming the
+            // permission alone is the only fix. The granted branch stays a short neutral line to
+            // match the sibling Accessibility row above.
             PermissionItem(
                 title = "Overlay Permission",
-                description = "Required to show block screens",
+                description = if (overlayEnabled) {
+                    "Shows block screens and helps Nudge restart protection if Android stops it in the background"
+                } else {
+                    "Off — Nudge can't show block screens, and Android is more likely to stop protection until you reopen the app"
+                },
                 granted = overlayEnabled,
                 icon = { Icon(Icons.Outlined.Layers, contentDescription = null) },
                 onClick = {
