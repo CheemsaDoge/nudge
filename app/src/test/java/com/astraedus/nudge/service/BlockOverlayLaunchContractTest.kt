@@ -117,10 +117,38 @@ class BlockOverlayLaunchContractTest {
         )
     }
 
+    /**
+     * EVERY launch site says WHICH BLOCK it is showing, and the parameter has no default
+     * ([#50](https://github.com/astraedus/nudge/issues/50)).
+     *
+     * A default here would be the silent-no-op shape this repo has been bitten by before: a new
+     * launch path that forgot the argument would still compile, and the gate would quietly fall
+     * back to the package-only "already pending" test that swallowed the reporter's block. The
+     * count is DISCOVERED from the source rather than hand-listed, so a fifth launch site is
+     * caught by this test rather than by a device session.
+     */
+    @Test
+    fun `every launch site names the block it is showing, and the parameter has no default`() {
+        val code = stripComments(service)
+        val callSites = Regex("""launchBlockOverlay\(""").findAll(code).count() - 1 // the decl
+        assertTrue("there must be launch sites to check", callSites >= 4)
+        assertEquals(
+            "every launchBlockOverlay call must pass a decisionKey; a launch that does not say " +
+                "which block it is cannot be told apart from a stale pending overlay",
+            callSites,
+            Regex("""decisionKey = """).findAll(code).count()
+        )
+        assertFalse(
+            "and the parameter must never gain a default -- that is what would let the next " +
+                "launch site forget it and fail silently",
+            Regex("""decisionKey:\s*String\s*=""").containsMatchIn(code)
+        )
+    }
+
     /** The gate runs, and it runs before anything is shown. */
     @Test
     fun `the launch helper consults the gate before starting the activity`() {
-        val decide = index(launchHelper, "guard.decide(targetPackage)")
+        val decide = index(launchHelper, "guard.decide(targetPackage, decisionKey)")
         val start = index(launchHelper, "startActivity(overlayIntent)")
         assertTrue("the gate must precede the launch", decide < start)
         assertTrue(
@@ -181,8 +209,10 @@ class BlockOverlayLaunchContractTest {
     @Test
     fun `the overlay reports when it actually reaches the screen`() {
         assertTrue(
-            "the launch must record that an overlay is on its way but not yet visible",
-            launchHelper.contains("guard.onOverlayLaunched(targetPackage)")
+            "the launch must record that an overlay is on its way but not yet visible, and WHICH " +
+                "block it is -- a pending overlay identified only by its package makes a later, " +
+                "DIFFERENT block for the same app look like a duplicate (issue #50)",
+            launchHelper.contains("guard.onOverlayLaunched(targetPackage, decisionKey)")
         )
         // The DECISIONS moved into the pure `OverlayLifecycle`, where they are driven against the
         // real guard by `OverlayLifecycleGuardTest`. What no value test can see is whether this

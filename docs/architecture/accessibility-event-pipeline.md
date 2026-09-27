@@ -165,6 +165,18 @@ skip a delay, where generous is a bypass. At five minutes a four-minute excursio
 ping-ponging under the window keeps it alive indefinitely. Two minutes is long enough to browse a
 gallery, short enough that using another app costs a fresh delay.
 
+**`WENT_HOME` can arrive by two event types, and only one of them is a window change
+([#58](https://github.com/astraedus/nudge/issues/58)).** `EventClassifier.classify` still restricts
+`ForegroundSignal.Home` to `TYPE_WINDOW_STATE_CHANGED` — launcher widget churn behind a fullscreen
+app must never revoke a delay. But device QA on 2026-09-25 caught the launcher arriving on a real
+Home press with **only** a content change, and on those runs the sitting simply never ended. The
+issue-#7 promotion path (`classifyVerifiedContentChangeAsSwitch`) therefore now answers `Home` for a
+launcher package, on exactly the evidence it already demands of an app: the package must own the
+**real active window**. Widget churn cannot pass that, because the app owns it while it is in front.
+What is widened is only *how the launcher may be recognised*, never *what may end a sitting* — that
+list is still these three causes. Detail, the counterfactuals and why the launcher had to be asked
+about ahead of `SYSTEM_PACKAGES`: `foreground-detection.md`.
+
 **An unknown package is never evidence the user left.** That single sentence is the fix for #28. A
 photo picker, a share sheet, a permission dialog, a custom tab, a notification hop and an OEM volume
 panel are all ordinary app packages, and they are sub-flows of the sitting by construction: another

@@ -61,6 +61,30 @@ Edge-triggering on *every* content change would fix it and immediately reintrodu
 - **Tests**: `ContentChangeAppSwitchTest` — verified re-entry evaluates; same package / unverified package / null active window / IME (incl. the FUTO case from #5) / framework / system / own package never do; plus a cost test asserting the active window is not read for cheaply-rejected events.
 - **Device-verified with an explicit counterfactual** (Pixel 3, 15s DELAY rule on Keep, alternating Contacts ↔ Keep through the recents overview): on the pre-fix build **5 of 6 re-entries produced no `foreground evaluation` and no block** — the bug reproduced on demand; with the fix, **6 of 6** re-entries evaluated and blocked, every one of them routed through the new fallback. The #5 regression case (complete the delay, raise the keyboard with `mInputShown=true`, keep using the app) logs `ignoring transient non-app window …inputmethod.latin` and `skip evaluation … reason=passthrough` with **zero** re-blocks.
 
+### The launcher falls in the same hole ([#58](https://github.com/astraedus/nudge/issues/58) mechanism 1)
+
+The section above and the "Going HOME re-arms the delay" section above **that** were written as if the two were independent: one is about an app re-entry that arrives as a content change, the other about the launcher arriving as a window change. Device QA on 2026-09-25 found the intersection, and it is a live bypass.
+
+Controlled trials on the bench Pixel 3, screen pinned awake, YouTube under a 5s DELAY: complete the delay, get inside, press Home, confirm the launcher is in front, reopen. Expected a fresh block; sometimes the app just opened. **On a failing run the launcher arrived ONLY as a content change** —
+
+```
+EV {"t":"WINDOW_CONTENT_CHANGED","p":"com.google.android.apps.nexuslauncher",...}
+```
+
+— and there is no `sitting ended … cause=WENT_HOME` line anywhere in the buffer. The passing runs of the same gesture, same device, same build, have the `WINDOW_STATE_CHANGED` and the `WENT_HOME` line. `EventClassifier.classify` restricts `ForegroundSignal.Home` to `WINDOW_STATE_CHANGED` — correctly, that refusal is #5 and #28 — so on the failing runs nothing classified as Home, the sitting never ended, the grant was never revoked, and the reopen walked straight in.
+
+**What the pre-fix code actually did with that event, which is worse than "ignored it".** The content change DID reach the issue-#7 fallback, and `classifyVerifiedContentChangeAsSwitch` answered `SystemSurface` — because the stock launchers are in `SYSTEM_PACKAGES`. The service's `signal !is AppWindow` check then dropped it before the active-window read. So the launcher was being answered by a package set that exists to say "should this be evaluated", asked the question "did the user leave" — the **grouped-constant trap this document already records three sprints of**, springing a fourth time, one entry point over from where it was fixed last.
+
+**The fix is the mechanism that already exists, extended by one signal.** `classifyVerifiedContentChangeAsSwitch` takes `launcherPackages` and returns `ForegroundSignal.Home` for a launcher package, and the service accepts `Home` alongside `AppWindow` before paying for the binder read. Everything load-bearing is unchanged:
+
+- **The verification is the entire safety margin, and it is the same one.** A launcher content change is promoted only when the launcher **owns the real active window**. Widget churn, wallpaper ticks and the icon grid redrawing behind a fullscreen app cannot pass it, because the app owns the active window while it is in front — which is exactly the property that makes `classify`'s blanket refusal unnecessary *here* and still necessary *there*.
+- **The launcher question is asked BEFORE the `SYSTEM_PACKAGES` question**, or the fix would be dead code on every Pixel. Pinned by `EventClassifierTest."the launcher outranks its own SYSTEM_PACKAGES membership"`, which first asserts the launcher really is in that set so the test cannot rot into a tautology.
+- **An empty launcher set is still "we cannot tell", and nothing is Home** — the same fail direction the resolution and the URL-bar read take. That fallback IS the pre-fix behaviour, which is what the counterfactuals assert.
+- **Home is still one of only two signals that may end a sitting**, and this does not widen that: it widens only *how the launcher may be recognised*, never *what counts as the launcher*.
+- **Evaluation is deliberately NOT run for a promoted `Home`.** The launcher has no rule; running one would only move `lastPackage` onto a package nothing blocks.
+- **Tests**: `EventClassifierTest` (verified launcher content change is Home; unverified is still `NotForeground`; empty launcher set falls back to `SystemSurface`; a PiP launcher is still PiP; the ordering test above), `ContentChangeAppSwitchTest` (Home not an app switch; launcher churn behind a live app rejected; the pre-fix drop), and `BlockLaunchGuardReplayTest` — which replays the report's own `EV` line through the **production codec** and the real `EventClassifier` + `SittingTracker`, asserting `WENT_HOME`, with the counterfactual that without the launcher set the same event changes nothing at all and the reopen three seconds later is still the same sitting.
+- **Still open, and NOT this**: backlog F6 — the `isOverlayActive` gate is hardcoded to `TYPE_WINDOW_STATE_CHANGED`, so a content-change-only re-entry under a stale overlay flag still takes the `else` branch. Different gate, different cost profile (lifting it hoists a binder read above the hottest path while an overlay is up), untouched here.
+
 ## Picture-in-picture escape — detect, explain, deep-link (fixes #19)
 
 Fix for [#19](https://github.com/astraedus/nudge/issues/19), found by @polubarev during PR #17 QA: when the block overlay backgrounds YouTube, YouTube enters **picture-in-picture** and the Short keeps playing. `BlockOverlayActivity` is correctly fullscreen and `topResumedActivity` and **still loses** — a PiP window is always-on-top by design. This is platform behaviour, not an overlay bug, and there is **no public API** for one app to disable PiP for another. The only real remedy is the per-app PiP permission in Settings, which only the user can flip.
@@ -208,7 +232,52 @@ launch. "We have observed nothing yet" is not evidence the user is elsewhere; th
 WEAKEN enforcement on a positive claim, the same failure direction the launcher-package resolution
 and the URL-bar read already take.
 
-### The accepted false-drop
+### The accepted false-drop — and the half of it that was NOT self-correcting ([#58](https://github.com/astraedus/nudge/issues/58) mechanism 2)
+
+> **Read this before the paragraph below it.** The claim "the user's return fires its own window
+> event and evaluates fresh" was device-falsified on 2026-09-25 and is now only true because the
+> deferral described here exists.
+
+`DROP_FOREGROUND_MOVED` answers two different situations with one verdict. **The user moved on** is
+a drop with nothing owed. **We raced ourselves** is not: the evaluation runs on the IO scope while
+foreground changes keep arriving on the main thread, so the target can be momentarily behind the
+launcher's dying window, or behind our own overlay task's first window, at exactly the millisecond
+the decision comes back.
+
+A controlled QA trial logged `WENT_HOME` correctly — the grant really was revoked — then
+`block overlay launch dropped … reason=DROP_FOREGROUND_MOVED` on the reopen, and the app opened
+free. Nothing re-evaluated on the return, and the reason is the **same-package debounce**: the
+dropped evaluation had already set `lastPackage` to the target and `lastEvalTime` to now, so the
+settle event a hundred milliseconds later found `packageName == lastPackage` inside `DEBOUNCE_MS`
+and returned. The block did not self-correct; it vanished.
+
+**The rule, not a retry timer.** A timer would re-ask at a moment nothing chose and would have to
+guess how long the race lasts. The honest trigger is the event the race was about:
+`BlockLaunchGate.DeferredLaunch` records a target dropped for this one reason, and the next
+`TYPE_WINDOW_STATE_CHANGED` that classifies as `ForegroundSignal.AppWindow` **for that same
+package** redeems it. Redemption does exactly one thing: it spends the debounce (`lastEvalTime = 0`)
+so the question is ASKED again. It never replays the dropped decision — by then that decision is as
+stale as the pending overlay #50 is about.
+
+- **Only `DROP_FOREGROUND_MOVED` creates one.** `DROP_WALK_AWAY_IN_FLIGHT` is the user having just
+  declined this block (#26) and re-arming after it would undo that fix; `DROP_ALREADY_PENDING` means
+  an overlay is on its way; `LAUNCH` settles the debt. All three clear it.
+- **It dies on a departure**, by the same evidence rule as the arrival and the storm — Home, or
+  another app genuinely in front — plus the `onDeparture` route for the two departures the stream
+  cannot describe (Nudge's own main window, a screen-off). A sub-flow is deliberately not a
+  departure, or the very race this exists for would cancel its own deferral.
+- **It expires** (`DEFERRED_LAUNCH_TTL_MS`, 10s) and it is **consumed** on redemption: one drop buys
+  one re-evaluation, never a standing licence. Re-blocking an app minutes after a drop is the
+  failure a user would see, so the bound is the safe direction.
+- **Issue #36 is untouched.** This decides whether an overlay is SHOWN; `claimConfrontation` still
+  decides whether a row is WRITTEN, and a redeemed deferral inside one arrival writes none.
+- **Tests**: `BlockLaunchGateTest` for each rule in isolation; `BlockLaunchGuardReplayTest` for the
+  reported sequence against the real guard, with three counterfactuals — no deferral redeems
+  nothing; **the reversed order** (evaluate, then redeem) leaves the block swallowed, which is
+  testing-strategy rule (d) for a fix whose content is an ordering; and a second settle in the same
+  arrival redeems nothing.
+
+The original paragraph, still true for the case it describes:
 
 A genuine foreign app window landing in the gap between evaluation start and evaluation finish does
 drop the pending block: the overlay would have covered that app's window anyway, and the user's
@@ -273,6 +342,62 @@ finishes it and clears the flag, while a bypass recognised too eagerly is this b
 SAME package while an overlay for it is already pending, so a single entry can only ever write one
 row even if some other path re-evaluates. Once the overlay is on screen, a fresh launch is allowed
 again, because a re-block after a genuine bypass is a real, separate block.
+
+### "Already pending" has to mean the SAME BLOCK ([#50](https://github.com/astraedus/nudge/issues/50))
+
+Asserted on the package alone, "already pending" is a claim the gate cannot support: a pending
+record that outlives the overlay it describes makes a **different** block for the same app look
+like a duplicate too.
+
+Reported on 1.17.3 device QA. A Keep rule with its daily limit already exceeded shows the
+"Daily limit reached" hard block; the user taps "Go Back", raises the limit in Nudge, and
+cold-launches Keep — and meets the same stale screen. Logcat shows the fresh `evaluate` computing a
+non-blocking `DELAY` with 17 minutes remaining, and the launch that would have shown it refused
+with `reason=DROP_ALREADY_PENDING`. A further Home → relaunch then showed the correct 5s delay,
+which is the settle window expiring rather than anything being fixed.
+
+The lifecycle ordering that leaves a `windowShown = false` record under an activity that is alive
+and in front: the daily-limit clock fires a second launch at an instance that is **already
+RESUMED**, so the delivery arrives through `onNewIntent` and `onResume` never runs again. Nothing
+can report that overlay shown, and for the next three seconds every launch for the app is treated
+as its duplicate — whatever it was going to show.
+
+**The signal, and why this one.** `PendingOverlay` carries a `decisionKey`:
+`BlockLaunchGate.decisionFingerprint` = the confrontation's identity (`confrontationKey` — the
+attributed app, the in-app feature, the site) **plus the block mode plus whether it is the
+daily-limit variant**, which is a different screen with different copy from a plain `HARD_BLOCK`.
+`decide` refuses a launch as a duplicate only while the pending record's fingerprint matches.
+
+Two other candidates were weighed and rejected:
+
+- **A rule-table change flow** — invalidate everything pending when the rules are edited. More
+  machinery, and less honest: it only knows about edits, and the right answer also changes with
+  nothing edited (a daily limit rolling over at midnight, a schedule window opening, a cooldown
+  expiring).
+- **The pending record's AGE** — cannot distinguish "stale" from "three seconds old and correct".
+  That is what `OVERLAY_SETTLE_MS` already is, and it is what let #50 through.
+
+**Nothing in the fingerprint ticks, and that is the load-bearing part.** `dailyTimeRemainingMs` and
+the auto-kick cooldown's `delaySeconds` both count down every time they are read; including either
+would make every re-launch inside the settle window look new and hand back the duplicate launches
+issue #36 measured at `wasBlocked` +25 across 10 launches. A fingerprint over a moving number is
+not a fingerprint.
+
+- **Every launch site supplies its own**, with no default on `launchBlockOverlay` or on
+  `BlockLaunchGuard.decide` — the same reason `targetPackage` and `attributedPackage` have none. A
+  forgotten argument would quietly restore the package-only test. (`BlockLaunchGate.decide`'s
+  parameter is nullable and defaults to null *for the pure tests*, where null means "no claim about
+  which block this is" and keeps the pre-#50 meaning — the same direction `foreground = null`
+  takes. That is also what the counterfactuals run.)
+- **A re-delivery adopts the new fingerprint** while keeping the on-screen overlay's id and
+  `windowShown` (issue #36's second mechanism): the activity is about to render that block, so a
+  record still describing the previous one would call the next identical launch fresh and the next
+  genuinely-different one a duplicate — #50 inverted.
+- **Tests**: `BlockLaunchGateTest` (a different block launches; the same block inside the settle
+  window is still refused; the fingerprint is stable across everything that ticks; it separates
+  mode / daily-limit copy / feature / site; the re-delivery adopts it) and
+  `OverlayLifecycleGuardTest`, which drives the reported lifecycle ordering against the real
+  `BlockLaunchGuard` with the pre-fix rule as its counterfactual.
 
 **Provenance and scope.** This defect PREDATES the #26/#31 work: the capture proving it,
 `picker-subflow-keeps-sitting.jsonl`, was committed in v1.16.0, and nothing in the #26/#31 change
