@@ -1,6 +1,7 @@
 package com.astraedus.nudge.service
 
 import com.astraedus.nudge.domain.block.BlockLaunchGate
+import com.astraedus.nudge.domain.block.delayKey
 import com.astraedus.nudge.domain.events.A11yEventType
 import com.astraedus.nudge.domain.events.AccessibilityEventRecord
 import com.astraedus.nudge.domain.events.EventClassifier
@@ -235,12 +236,12 @@ class InterventionCountReplayTest {
         }
 
         private fun launchBlockOverlay(target: String): Boolean {
-            val decision = guard.decide(target)
+            val decision = guard.decide(target, delayKey(target))
             guard.onLaunchAttempt(target, decision)?.let { storms += it }
             if (decision != BlockLaunchGate.Decision.LAUNCH) return false
             launches++
             overlayActive = true
-            guard.onOverlayLaunched(target)
+            guard.onOverlayLaunched(target, delayKey(target))
             startOverlayActivity(target)
             return true
         }
@@ -599,7 +600,8 @@ class InterventionCountReplayTest {
             pending = onScreen,
             target = blocked,
             nowMs = clock,
-            id = 9
+            id = 9,
+            decisionKey = delayKey(blocked)
         )
         assertEquals(
             "a re-delivery through onNewIntent leaves the overlay exactly where it is: on screen",

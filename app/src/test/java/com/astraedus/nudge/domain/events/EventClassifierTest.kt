@@ -384,7 +384,61 @@ class EventClassifierTest {
         assertEquals(ForegroundSignal.NotForeground(instagram), classify(record))
         assertEquals(
             ForegroundSignal.AppWindow(instagram),
-            classifier.classifyVerifiedContentChangeAsSwitch(record, futo, emptySet())
+            classifier.classifyVerifiedContentChangeAsSwitch(record, futo, launcherSet, emptySet())
+        )
+    }
+
+    // --- issue #58's verified launcher content change --------------------------------------------
+
+    /**
+     * ISSUE #58, MECHANISM 1. On a failing Pixel 3 trial the launcher arrived ONLY as a content
+     * change, so nothing classified as [ForegroundSignal.Home], the sitting never ended, and
+     * reopening the blocked app walked past its completed delay.
+     *
+     * The unverified classification must stay exactly as it was — that refusal is #5 and #28 — and
+     * the VERIFIED one, the same evidence that already promotes an app's content change, says Home.
+     */
+    @Test
+    fun `a verified launcher content change is Home`() {
+        val record = event(launcher, A11yEventType.WINDOW_CONTENT_CHANGED)
+        assertEquals(
+            "unverified, a launcher content change is still nothing: widget churn behind a " +
+                "fullscreen app must never end a sitting",
+            ForegroundSignal.NotForeground(launcher),
+            classify(record)
+        )
+        assertEquals(
+            ForegroundSignal.Home(launcher),
+            classifier.classifyVerifiedContentChangeAsSwitch(record, futo, launcherSet, emptySet())
+        )
+    }
+
+    /**
+     * The same fail direction [classify] documents: an unresolvable launcher set means "we cannot
+     * tell", and nothing is Home. A false revoke re-blocks a user who never went anywhere.
+     */
+    @Test
+    fun `with no launcher packages known a verified launcher content change is not Home`() {
+        val record = event(launcher, A11yEventType.WINDOW_CONTENT_CHANGED)
+        assertEquals(
+            ForegroundSignal.AppWindow(launcher),
+            classifier.classifyVerifiedContentChangeAsSwitch(record, futo, emptySet(), emptySet())
+        )
+    }
+
+    /**
+     * The launcher question is asked BEFORE the system-package question and AFTER the three
+     * not-on-screen ones, so a launcher that also happens to be a system package is still Home and
+     * a picture-in-picture bubble still outranks everything. Same order [classify] uses.
+     */
+    @Test
+    fun `a PiP launcher is still PiP, never Home`() {
+        val record = event(launcher, A11yEventType.WINDOW_CONTENT_CHANGED)
+        assertEquals(
+            ForegroundSignal.PipOnly(launcher),
+            classifier.classifyVerifiedContentChangeAsSwitch(
+                record, futo, launcherSet, setOf(launcher)
+            )
         )
     }
 
@@ -397,7 +451,7 @@ class EventClassifierTest {
     fun `a verified content change still rejects PiP own UI keyboards and system packages`() {
         fun promote(pkg: String, pip: Set<String> = emptySet()) =
             classifier.classifyVerifiedContentChangeAsSwitch(
-                event(pkg, A11yEventType.WINDOW_CONTENT_CHANGED), futo, pip
+                event(pkg, A11yEventType.WINDOW_CONTENT_CHANGED), futo, launcherSet, pip
             )
 
         assertEquals(ForegroundSignal.PipOnly(youtube), promote(youtube, pip = setOf(youtube)))

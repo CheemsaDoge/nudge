@@ -51,7 +51,7 @@ class OverlayLifecycleGuardTest {
      * back which pending overlay it is.
      */
     private fun serviceLaunches(target: String): Long {
-        guard.onOverlayLaunched(target)
+        guard.onOverlayLaunched(target, delayKey(target))
         return guard.currentOverlayId()
     }
 
@@ -141,7 +141,7 @@ class OverlayLifecycleGuardTest {
             "an overlay that is on screen is not an overlay still in flight; a further real " +
                 "confrontation in this app must still get its block",
             BlockLaunchGate.Decision.LAUNCH,
-            guard.decide(KEEP)
+            guard.decide(KEEP, delayKey(KEEP))
         )
 
         // COUNTERFACTUAL: the pre-PR-#40 rule, which reset an on-screen overlay to "not yet shown".
@@ -301,7 +301,7 @@ class OverlayLifecycleGuardTest {
         assertEquals(
             "a departure is in flight; this window is Keep leaving, not the user arriving",
             BlockLaunchGate.Decision.DROP_WALK_AWAY_IN_FLIGHT,
-            guard.decide(KEEP)
+            guard.decide(KEEP, delayKey(KEEP))
         )
 
         // COUNTERFACTUAL: the same instant on a guard that was never told a walk-away started —
@@ -312,7 +312,7 @@ class OverlayLifecycleGuardTest {
         assertEquals(
             "without the armed window the block really does come straight back",
             BlockLaunchGate.Decision.LAUNCH,
-            unarmed.decide(KEEP)
+            unarmed.decide(KEEP, delayKey(KEEP))
         )
     }
 
@@ -361,7 +361,7 @@ class OverlayLifecycleGuardTest {
         assertEquals(
             "the block must not come back over an app the user declined 1.6 seconds ago",
             BlockLaunchGate.Decision.DROP_WALK_AWAY_IN_FLIGHT,
-            guard.decide(KEEP)
+            guard.decide(KEEP, delayKey(KEEP))
         )
 
         // COUNTERFACTUAL: the same run with the window armed only at the tap.
@@ -374,7 +374,7 @@ class OverlayLifecycleGuardTest {
             "armed only at the tap, the window has expired by the time the pop it caused lands " +
                 "(${clock - tapAt}ms elapsed vs a ${BlockLaunchGate.WALK_AWAY_TRANSITION_MS}ms window)",
             BlockLaunchGate.Decision.LAUNCH,
-            tapOnly.decide(KEEP)
+            tapOnly.decide(KEEP, delayKey(KEEP))
         )
     }
 
@@ -435,7 +435,7 @@ class OverlayLifecycleGuardTest {
         assertNotEquals(
             "and Instagram's own block must still be showable: the user never walked away from it",
             BlockLaunchGate.Decision.DROP_WALK_AWAY_IN_FLIGHT,
-            guard.decide(INSTAGRAM)
+            guard.decide(INSTAGRAM, delayKey(INSTAGRAM))
         )
     }
 
@@ -463,7 +463,7 @@ class OverlayLifecycleGuardTest {
         clock += 100
         assertEquals(
             BlockLaunchGate.Decision.DROP_WALK_AWAY_IN_FLIGHT,
-            guard.decide(chrome)
+            guard.decide(chrome, delayKey(chrome))
         )
     }
 }

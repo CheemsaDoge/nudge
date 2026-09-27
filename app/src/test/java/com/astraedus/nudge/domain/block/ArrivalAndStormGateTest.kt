@@ -610,7 +610,7 @@ class ArrivalAndStormGateTest {
     @Test
     fun `a re-launch for the same target while the overlay is already shown keeps windowShown true and its id`() {
         val shown = PendingOverlay(insta, launchedAtMs = 1_000, windowShown = true, id = 7L)
-        val result = BlockLaunchGate.pendingOverlayAfterLaunch(shown, target = insta, nowMs = 4_000, id = 9L)
+        val result = BlockLaunchGate.pendingOverlayAfterLaunch(shown, target = insta, nowMs = 4_000, id = 9L, decisionKey = delayKey(insta))
         assertTrue(
             "the overlay is genuinely on screen; resetting this starves isGenuineBypass forever",
             result.windowShown
@@ -626,7 +626,7 @@ class ArrivalAndStormGateTest {
     @Test
     fun `a launch for a different target produces a fresh unseen pending overlay`() {
         val shown = PendingOverlay(insta, launchedAtMs = 1_000, windowShown = true, id = 7L)
-        val result = BlockLaunchGate.pendingOverlayAfterLaunch(shown, target = keep, nowMs = 4_000, id = 9L)
+        val result = BlockLaunchGate.pendingOverlayAfterLaunch(shown, target = keep, nowMs = 4_000, id = 9L, decisionKey = delayKey(insta))
         assertEquals(keep, result.packageName)
         assertFalse(
             "a new target's overlay has not been seen on screen yet",
@@ -639,7 +639,7 @@ class ArrivalAndStormGateTest {
     @Test
     fun `a launch for the same target whose overlay has not yet been seen produces a fresh pending`() {
         val unseen = PendingOverlay(insta, launchedAtMs = 1_000, windowShown = false, id = 7L)
-        val result = BlockLaunchGate.pendingOverlayAfterLaunch(unseen, target = insta, nowMs = 4_000, id = 9L)
+        val result = BlockLaunchGate.pendingOverlayAfterLaunch(unseen, target = insta, nowMs = 4_000, id = 9L, decisionKey = delayKey(insta))
         assertFalse(
             "an overlay that has never reached the screen is replaced, not preserved, on re-launch",
             result.windowShown
@@ -650,7 +650,7 @@ class ArrivalAndStormGateTest {
 
     @Test
     fun `a launch with no prior pending overlay produces a fresh unseen pending`() {
-        val result = BlockLaunchGate.pendingOverlayAfterLaunch(null, target = insta, nowMs = 4_000, id = 9L)
+        val result = BlockLaunchGate.pendingOverlayAfterLaunch(null, target = insta, nowMs = 4_000, id = 9L, decisionKey = delayKey(insta))
         assertEquals(insta, result.packageName)
         assertFalse(result.windowShown)
         assertEquals(9L, result.id)

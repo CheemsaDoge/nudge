@@ -82,14 +82,41 @@ class EventClassifier(
      * to [ForegroundSignal.AppWindow] is visible next to the rule it is an exception to. The caller
      * still owns the verification (reading `rootInActiveWindow` is a binder call); this only owns
      * what a verified event means.
+     *
+     * ## The launcher ([#58](https://github.com/astraedus/nudge/issues/58))
+     *
+     * [classify] above refuses to call a launcher content change [ForegroundSignal.Home], and it is
+     * right to: launcher content-change churn (widgets ticking, the icon grid redrawing behind a
+     * fullscreen app) is not evidence anything came forward, and Home is one of only two signals
+     * allowed to end a sitting outright. That refusal is what #5 and #28 cost.
+     *
+     * But the device does not always give us the other event. On a failing Pixel 3 trial the
+     * launcher arrived ONLY as `WINDOW_CONTENT_CHANGED` — no `WINDOW_STATE_CHANGED` anywhere in the
+     * buffer — so nothing classified as Home, the sitting never ended, the completed delay was
+     * never revoked, and reopening the blocked app walked straight in. Same device, same gesture,
+     * same build; the passing trials had the state change and the failing one did not.
+     *
+     * The hole is the same one issue #7 already has a mechanism for, one signal over. This entry
+     * point exists precisely because a content change that PROVABLY owns the active window is no
+     * longer churn — it is the window it claims to be. So the launcher gets the same treatment on
+     * the same evidence: verified, it is Home; unverified, it is nothing, exactly as before. A
+     * widget ticking behind a fullscreen app cannot pass the verification, because the app owns the
+     * active window, which is what keeps this from being the blanket "a launcher event means home"
+     * that [classify] forbids.
+     *
+     * @param launcherPackages the home-screen packages, resolved from PackageManager. Empty means
+     *   "we could not tell", and then nothing here is Home either — the same fail direction
+     *   [classify] documents, because a false revoke re-blocks a user who never went anywhere.
      */
     fun classifyVerifiedContentChangeAsSwitch(
         record: AccessibilityEventRecord,
         currentImePackage: String?,
+        launcherPackages: Set<String>,
         pipOnlyPackages: Set<String>
     ): ForegroundSignal {
         val pkg = record.packageName
         notOnScreen(pkg, record.className, currentImePackage, pipOnlyPackages)?.let { return it }
+        if (pkg in launcherPackages) return ForegroundSignal.Home(pkg)
         if (pkg in systemPackages) return ForegroundSignal.SystemSurface(pkg)
         return ForegroundSignal.AppWindow(pkg)
     }

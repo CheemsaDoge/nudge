@@ -1,6 +1,7 @@
 package com.astraedus.nudge.service
 
 import com.astraedus.nudge.domain.block.BlockLaunchGate
+import com.astraedus.nudge.domain.block.delayKey
 import com.astraedus.nudge.domain.events.A11yCapture
 import com.astraedus.nudge.domain.events.A11yEventType
 import com.astraedus.nudge.domain.events.AccessibilityEventRecord
@@ -140,7 +141,7 @@ class BlockLaunchGuardReplayTest {
         assertEquals(
             "the first block is legitimate and must launch",
             BlockLaunchGate.Decision.LAUNCH,
-            guard.decide(blocked)
+            guard.decide(blocked, delayKey(blocked))
         )
 
         // The overlay goes up. Its own window is Nudge UI.
@@ -158,7 +159,7 @@ class BlockLaunchGuardReplayTest {
         assertEquals(
             "this is issue #26: a real foreground event for a real app that is on its way OUT",
             BlockLaunchGate.Decision.DROP_WALK_AWAY_IN_FLIGHT,
-            guard.decide(blocked)
+            guard.decide(blocked, delayKey(blocked))
         )
         assertEquals(
             "counterfactual, the pre-fix code launched here, which is the reported bug",
@@ -188,7 +189,7 @@ class BlockLaunchGuardReplayTest {
 
         tick(60)
         window(blocked)
-        assertEquals(BlockLaunchGate.Decision.DROP_WALK_AWAY_IN_FLIGHT, guard.decide(blocked))
+        assertEquals(BlockLaunchGate.Decision.DROP_WALK_AWAY_IN_FLIGHT, guard.decide(blocked, delayKey(blocked)))
 
         // The go-home lands.
         tick(120)
@@ -206,7 +207,7 @@ class BlockLaunchGuardReplayTest {
         assertEquals(
             "a deliberate re-open after the transition completed is a fresh attempt",
             BlockLaunchGate.Decision.LAUNCH,
-            guard.decide(blocked)
+            guard.decide(blocked, delayKey(blocked))
         )
     }
 
@@ -229,7 +230,7 @@ class BlockLaunchGuardReplayTest {
         assertEquals(
             "the overlay fail-safe must land inside the service window, or #26 returns for this case",
             BlockLaunchGate.Decision.DROP_WALK_AWAY_IN_FLIGHT,
-            guard.decide(blocked)
+            guard.decide(blocked, delayKey(blocked))
         )
 
         tick(400)
@@ -237,7 +238,7 @@ class BlockLaunchGuardReplayTest {
         assertEquals(
             "and past 1500ms the app really is just in the foreground, so it blocks",
             BlockLaunchGate.Decision.LAUNCH,
-            guard.decide(blocked)
+            guard.decide(blocked, delayKey(blocked))
         )
     }
 
@@ -256,7 +257,7 @@ class BlockLaunchGuardReplayTest {
 
         assertEquals(
             BlockLaunchGate.Decision.DROP_FOREGROUND_MOVED,
-            guard.decide(blocked)
+            guard.decide(blocked, delayKey(blocked))
         )
         assertEquals(
             "counterfactual, the pre-fix code launched here",
@@ -272,7 +273,7 @@ class BlockLaunchGuardReplayTest {
         tick(150)
         window(nudge, "com.astraedus.nudge.MainActivity")
 
-        assertEquals(BlockLaunchGate.Decision.DROP_FOREGROUND_MOVED, guard.decide(blocked))
+        assertEquals(BlockLaunchGate.Decision.DROP_FOREGROUND_MOVED, guard.decide(blocked, delayKey(blocked)))
     }
 
     @Test
@@ -281,7 +282,7 @@ class BlockLaunchGuardReplayTest {
         tick(150)
         window("com.google.android.keep")
 
-        assertEquals(BlockLaunchGate.Decision.DROP_FOREGROUND_MOVED, guard.decide(blocked))
+        assertEquals(BlockLaunchGate.Decision.DROP_FOREGROUND_MOVED, guard.decide(blocked, delayKey(blocked)))
     }
 
     /**
@@ -318,7 +319,7 @@ class BlockLaunchGuardReplayTest {
             assertEquals(
                 "$what must not suppress a block for the app underneath it",
                 BlockLaunchGate.Decision.LAUNCH,
-                fresh.decide(blocked)
+                fresh.decide(blocked, delayKey(blocked))
             )
         }
     }
@@ -334,7 +335,7 @@ class BlockLaunchGuardReplayTest {
         tick(20)
         event(A11yEventType.WINDOW_CONTENT_CHANGED, blocked)
         event(A11yEventType.VIEW_SCROLLED, blocked)
-        assertEquals(BlockLaunchGate.Decision.LAUNCH, guard.decide(blocked))
+        assertEquals(BlockLaunchGate.Decision.LAUNCH, guard.decide(blocked, delayKey(blocked)))
     }
 
     /**
@@ -352,7 +353,7 @@ class BlockLaunchGuardReplayTest {
         tick(30)
         window("com.google.android.providers.media.module")
 
-        assertEquals(BlockLaunchGate.Decision.DROP_FOREGROUND_MOVED, guard.decide(blocked))
+        assertEquals(BlockLaunchGate.Decision.DROP_FOREGROUND_MOVED, guard.decide(blocked, delayKey(blocked)))
         assertEquals("a picker is not the user leaving, issue #28", emptyList<SittingEndCause>(), sittingEnds)
 
         tick(5_000)
@@ -360,7 +361,7 @@ class BlockLaunchGuardReplayTest {
         assertEquals(
             "and the return is evaluated normally",
             BlockLaunchGate.Decision.LAUNCH,
-            guard.decide(blocked)
+            guard.decide(blocked, delayKey(blocked))
         )
     }
 
@@ -413,7 +414,7 @@ class BlockLaunchGuardReplayTest {
 
         clock = firstKeep.eventTimeMs
         window(keep, firstKeep.className)
-        guard.onOverlayLaunched(keep)
+        guard.onOverlayLaunched(keep, delayKey(keep))
 
         clock = overlayTaskWindow.eventTimeMs
         window(nudge, overlayTaskWindow.className)
@@ -442,7 +443,7 @@ class BlockLaunchGuardReplayTest {
             "and a second launch for the same app while the first is still pending is refused, so " +
                 "one entry can only ever write one row",
             BlockLaunchGate.Decision.DROP_ALREADY_PENDING,
-            guard.decide(keep)
+            guard.decide(keep, delayKey(keep))
         )
 
         // The overlay reaches the screen, which in production is BlockOverlayActivity.onResume.
@@ -471,7 +472,7 @@ class BlockLaunchGuardReplayTest {
     @Test
     fun `a different app coming forward while the overlay launches is still a bypass`() {
         window(blocked)
-        guard.onOverlayLaunched(blocked)
+        guard.onOverlayLaunched(blocked, delayKey(blocked))
         tick(100)
         val other = "com.google.android.keep"
         val signal = classify(
@@ -488,7 +489,7 @@ class BlockLaunchGuardReplayTest {
     @Test
     fun `an overlay that never appears stops suppressing once the settle window passes`() {
         window(blocked)
-        guard.onOverlayLaunched(blocked)
+        guard.onOverlayLaunched(blocked, delayKey(blocked))
 
         tick(BlockLaunchGate.OVERLAY_SETTLE_MS - 1)
         var signal = classify(
@@ -534,7 +535,7 @@ class BlockLaunchGuardReplayTest {
         assertEquals(
             "the first tick blocks: Keep is in front and past its daily limit",
             BlockLaunchGate.Decision.LAUNCH,
-            guard.decide(keep)
+            guard.decide(keep, delayKey(keep))
         )
 
         tick(30_000)
@@ -544,7 +545,7 @@ class BlockLaunchGuardReplayTest {
         assertEquals(
             "the counter is drawn OVER Keep; the user never left, so the next tick must still block",
             BlockLaunchGate.Decision.LAUNCH,
-            guard.decide(keep)
+            guard.decide(keep, delayKey(keep))
         )
     }
 
@@ -561,7 +562,7 @@ class BlockLaunchGuardReplayTest {
                 emptySet()
             )
         )
-        assertEquals(BlockLaunchGate.Decision.LAUNCH, preFix.decide(keep))
+        assertEquals(BlockLaunchGate.Decision.LAUNCH, preFix.decide(keep, delayKey(keep)))
 
         tick(30_000)
         val overlaySignal = preFixClassifier.classify(
@@ -587,7 +588,7 @@ class BlockLaunchGuardReplayTest {
             "this is the reported bug: a user past their daily limit, sitting in the blocked app, " +
                 "with the block refused because our own counter claimed the foreground",
             BlockLaunchGate.Decision.DROP_FOREGROUND_MOVED,
-            preFix.decide(keep)
+            preFix.decide(keep, delayKey(keep))
         )
     }
 
@@ -604,7 +605,7 @@ class BlockLaunchGuardReplayTest {
         event(A11yEventType.WINDOW_CONTENT_CHANGED, nudge, AwarenessOverlayWindow.CLASS_NAME)
 
         assertEquals(keep, guard.foregroundPackage)
-        assertEquals(BlockLaunchGate.Decision.LAUNCH, guard.decide(keep))
+        assertEquals(BlockLaunchGate.Decision.LAUNCH, guard.decide(keep, delayKey(keep)))
     }
 
     /**
@@ -618,7 +619,7 @@ class BlockLaunchGuardReplayTest {
         window(keep)
         window(nudge, BlockLaunchGate.MAIN_APP_ACTIVITY_CLASS)
         assertEquals(nudge, guard.foregroundPackage)
-        assertEquals(BlockLaunchGate.Decision.DROP_FOREGROUND_MOVED, guard.decide(keep))
+        assertEquals(BlockLaunchGate.Decision.DROP_FOREGROUND_MOVED, guard.decide(keep, delayKey(keep)))
     }
 
     /**
@@ -649,14 +650,14 @@ class BlockLaunchGuardReplayTest {
     fun `a fresh guard has no claim about the foreground and never weakens enforcement`() {
         val fresh = BlockLaunchGuard().also { it.nowMs = { clock } }
         assertNull(fresh.foregroundPackage)
-        assertEquals(BlockLaunchGate.Decision.LAUNCH, fresh.decide(blocked))
+        assertEquals(BlockLaunchGate.Decision.LAUNCH, fresh.decide(blocked, delayKey(blocked)))
     }
 
     @Test
     fun `a blank walk-away package is ignored rather than arming a window for the empty string`() {
         window(blocked)
         guard.onWalkAwayStarted("")
-        assertEquals(BlockLaunchGate.Decision.LAUNCH, guard.decide(blocked))
+        assertEquals(BlockLaunchGate.Decision.LAUNCH, guard.decide(blocked, delayKey(blocked)))
     }
 
     @Test
@@ -665,6 +666,6 @@ class BlockLaunchGuardReplayTest {
         guard.onWalkAwayStarted(blocked)
         guard.reset()
         assertNull(guard.foregroundPackage)
-        assertEquals(BlockLaunchGate.Decision.LAUNCH, guard.decide(blocked))
+        assertEquals(BlockLaunchGate.Decision.LAUNCH, guard.decide(blocked, delayKey(blocked)))
     }
 }

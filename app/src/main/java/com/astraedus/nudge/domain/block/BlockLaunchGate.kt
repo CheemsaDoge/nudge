@@ -86,7 +86,22 @@ object BlockLaunchGate {
          * overlay finishing itself from `onStop` while the service launches a replacement has its
          * `onDestroy` run AFTER the new instance's `onResume`. See [pendingOverlayAfterDismissal].
          */
-        val id: Long = NO_OVERLAY_ID
+        val id: Long = NO_OVERLAY_ID,
+        /**
+         * WHICH BLOCK this overlay is, as [decisionFingerprint] spells it
+         * ([#50](https://github.com/astraedus/nudge/issues/50)).
+         *
+         * Without it "already pending" meant nothing but *an overlay for this package is in
+         * flight*, and a pending record that outlived its activity made the NEXT, different block
+         * for the same app a duplicate of a block that no longer applies. The reporter raised a
+         * daily limit, cold-launched the app, and met the previous "Daily limit reached" screen
+         * again while logcat showed the fresh evaluation had computed a `DELAY` with 17 minutes
+         * left; the launch that would have corrected it was refused as [Decision.DROP_ALREADY_PENDING].
+         *
+         * Defaulted for the pure tests that predate it. Production has exactly one writer
+         * ([pendingOverlayAfterLaunch]) and it has no default there.
+         */
+        val decisionKey: String = ""
     )
 
     /** The id of an overlay nobody has claimed. Never equal to an id the guard hands out. */
@@ -137,6 +152,11 @@ object BlockLaunchGate {
      *   nothing yet. Null means "we have no claim", and the gate does not weaken enforcement on a
      *   claim it does not have.
      * @param walkAway a go-home dispatched by the walk-away path, if one is outstanding.
+     * @param decisionKey [decisionFingerprint] for the block being launched, or null when the
+     *   caller makes no claim about which block this is. Null keeps the pre-#50 meaning of
+     *   "already pending" — same package, therefore the same thing — which is the same direction
+     *   every other unknown in this gate fails in: a claim we do not have never weakens the guard.
+     *   Production always has one; `BlockLaunchGuard.decide` takes it with no default.
      */
     fun decide(
         target: String,
@@ -144,14 +164,22 @@ object BlockLaunchGate {
         walkAway: WalkAway?,
         nowMs: Long,
         transitionMs: Long = WALK_AWAY_TRANSITION_MS,
-        pendingOverlay: PendingOverlay? = null
+        pendingOverlay: PendingOverlay? = null,
+        decisionKey: String? = null
     ): Decision = when {
         // Asked before anything else because it is about THIS launch being redundant rather than
         // about where the user is. Two overlays for one entry into an app write two `UsageEvent`
         // rows and inflate the count the home screen shows.
+        //
+        // "Redundant" is the whole content of this branch, and until issue #50 it was asserted on
+        // the package alone -- so a pending record that outlived the overlay it described made a
+        // DIFFERENT block for the same app redundant too. Same package, same three seconds, and
+        // the fresh decision was thrown away in favour of a screen the rules no longer produced.
+        // A pending overlay is only this launch's duplicate while it is still the SAME BLOCK.
         pendingOverlay != null &&
             !pendingOverlay.windowShown &&
             pendingOverlay.packageName == target &&
+            (decisionKey == null || pendingOverlay.decisionKey == decisionKey) &&
             nowMs - pendingOverlay.launchedAtMs < OVERLAY_SETTLE_MS -> Decision.DROP_ALREADY_PENDING
 
         // Asked FIRST because it is the more specific answer, and because in the #26 case the
@@ -290,6 +318,129 @@ object BlockLaunchGate {
         }
     }
 
+    // ------------------------------------ the block we raced ourselves out of (issue #58, part 2)
+
+    /**
+     * A launch that [Decision.DROP_FOREGROUND_MOVED] refused, kept until its target settles.
+     *
+     * ## Why a dropped launch has to be remembered at all
+     *
+     * [decide] drops a launch when the foreground has moved off the target, and that is right in
+     * general: an overlay must not land over the launcher or over another app. But it answers two
+     * different situations with one verdict. *The user moved on* is a drop with nothing owed. *We
+     * raced ourselves* is not — the evaluation runs on the IO scope (a rule lookup, a usage read,
+     * sometimes a URL-bar read) while foreground changes keep arriving on the main thread, so the
+     * app can be momentarily behind the launcher's dying window, or behind our own overlay task's
+     * first window, at exactly the millisecond the decision comes back.
+     *
+     * [#58](https://github.com/astraedus/nudge/issues/58) is the second of those, measured: a
+     * controlled trial logged `WENT_HOME` correctly, so the grant really was revoked, then
+     * `block overlay launch dropped ... reason=DROP_FOREGROUND_MOVED`, and the app opened free.
+     * Nothing re-evaluated on the return, because the service's own same-package debounce
+     * (`DEBOUNCE_MS`, 1s) had already been spent by the evaluation that produced the dropped
+     * decision — the settle event found `lastPackage` already equal to the target and returned.
+     *
+     * ## Why it is a RULE and not a retry timer
+     *
+     * A timer would re-ask the question at a moment nothing chose, and it would have to guess how
+     * long the race lasts. The honest trigger is the event the race was about: **the target
+     * genuinely settling in front**, a `TYPE_WINDOW_STATE_CHANGED` that classifies as
+     * [ForegroundSignal.AppWindow] for that same package. At that instant the premise the drop
+     * doubted is true again, so the decision is worth recomputing — and recomputing is the point,
+     * never replaying the old decision, which by then may be as stale as the one issue #50 is
+     * about.
+     *
+     * It expires ([DEFERRED_LAUNCH_TTL_MS]) and it is cancelled by any departure
+     * ([deferredLaunchAfterSignal]), so "the user moved on" still costs nothing: the deferral dies
+     * with the foreground it was waiting for.
+     */
+    data class DeferredLaunch(val targetPackage: String, val droppedAtMs: Long)
+
+    /**
+     * How long a dropped launch stays worth redeeming.
+     *
+     * Generous against the race it is for — the drop and the settle are milliseconds apart when we
+     * raced ourselves — and short enough that a deferral which somehow survived its cancellation
+     * rules cannot re-block an app minutes later out of nowhere. Redeeming late is the failure that
+     * would be visible to a user, so the bound is the safe direction here.
+     */
+    const val DEFERRED_LAUNCH_TTL_MS = 10_000L
+
+    /**
+     * The deferred launch after a gate [decision] for [target].
+     *
+     * Only [Decision.DROP_FOREGROUND_MOVED] creates one. The other two drops are DELIBERATE
+     * suppressions with nothing owed, and re-arming after them would undo the thing they are for:
+     * [Decision.DROP_WALK_AWAY_IN_FLIGHT] is the user having just declined this very block (#26),
+     * and [Decision.DROP_ALREADY_PENDING] means the overlay is on its way already. A
+     * [Decision.LAUNCH] settles the debt outright.
+     */
+    fun deferredLaunchAfterDecision(
+        deferred: DeferredLaunch?,
+        decision: Decision,
+        target: String,
+        nowMs: Long
+    ): DeferredLaunch? = when (decision) {
+        Decision.DROP_FOREGROUND_MOVED -> DeferredLaunch(target, nowMs)
+        Decision.LAUNCH,
+        Decision.DROP_WALK_AWAY_IN_FLIGHT,
+        Decision.DROP_ALREADY_PENDING ->
+            if (deferred != null && deferred.targetPackage == target) null else deferred
+    }
+
+    /**
+     * The deferred launch after [signal]: null once the foreground has genuinely left its target.
+     *
+     * Deliberately the same departure rule as [arrivalAfterSignal] and [stormAfterSignal], for the
+     * third time and for the same reason — only a signal that proves the user is somewhere else
+     * may end the thing it governs. A sub-flow (a picker, a share sheet, the volume panel) is not
+     * a departure here either, or the very race this exists for would cancel its own deferral.
+     */
+    fun deferredLaunchAfterSignal(
+        signal: ForegroundSignal,
+        deferred: DeferredLaunch?
+    ): DeferredLaunch? {
+        if (deferred == null) return null
+        return when (signal) {
+            is ForegroundSignal.Home -> null
+            is ForegroundSignal.AppWindow ->
+                if (signal.packageName == deferred.targetPackage) deferred else null
+
+            is ForegroundSignal.OwnUi,
+            is ForegroundSignal.AwarenessOverlay,
+            is ForegroundSignal.SystemSurface,
+            is ForegroundSignal.Transient,
+            is ForegroundSignal.PipOnly,
+            is ForegroundSignal.NotForeground -> deferred
+        }
+    }
+
+    /**
+     * Is this event the settle that redeems [deferred] — the target the drop was about, genuinely
+     * in front again, still inside [ttlMs]?
+     *
+     * `WINDOW_STATE_CHANGED` and nothing else, for the same reason [isGenuineBypass] insists on it:
+     * it is the only event type that means *a new activity is in front*. A content change from the
+     * target arrives from a window that is already there and proves nothing about the race.
+     *
+     * The caller re-EVALUATES on a true. It must not re-launch the decision that was dropped: by
+     * the time the target settles, that decision is exactly as old as the stale pending overlay of
+     * issue #50, and replaying it would show the user a screen the rules may no longer produce.
+     */
+    fun isDeferredLaunchRedeemed(
+        deferred: DeferredLaunch?,
+        eventType: A11yEventType,
+        signal: ForegroundSignal,
+        nowMs: Long,
+        ttlMs: Long = DEFERRED_LAUNCH_TTL_MS
+    ): Boolean {
+        if (deferred == null) return false
+        if (eventType != A11yEventType.WINDOW_STATE_CHANGED) return false
+        if (signal !is ForegroundSignal.AppWindow) return false
+        if (signal.packageName != deferred.targetPackage) return false
+        return nowMs - deferred.droppedAtMs < ttlMs
+    }
+
     // ------------------------------------------------- one confrontation per arrival (issue #36)
 
     /**
@@ -360,6 +511,46 @@ object BlockLaunchGate {
         append(attributedPackage)
         featureKey?.takeIf { it.isNotBlank() }?.let { append("|feature=").append(it) }
         webDomain?.takeIf { it.isNotBlank() }?.let { append("|domain=").append(it) }
+    }
+
+    /**
+     * WHICH BLOCK a launch is, for the one question [decide] asks with it: *is the overlay already
+     * in flight the same thing this launch would show, or a stale one?*
+     * ([#50](https://github.com/astraedus/nudge/issues/50).)
+     *
+     * ## Why this shape, and not the other two candidates
+     *
+     * The obvious signal was **a rule-table change flow** — invalidate everything pending when the
+     * rules are edited. It is more machinery and it is less honest: it only knows about edits, and
+     * the reported case is one of several ways the right answer changes with nothing edited at all
+     * (a daily limit rolling over at midnight, a schedule window opening, a cooldown expiring). The
+     * other was **the pending record's AGE**, which cannot distinguish "stale" from "three seconds
+     * old and correct" — that is exactly what [OVERLAY_SETTLE_MS] already is, and it is what let
+     * #50 through.
+     *
+     * What [decide] actually needs is the cheapest thing that answers *would the user see a
+     * different screen*, computed from values the launch site already holds. That is this: the
+     * confrontation's identity ([confrontationKey] — the attributed app, the in-app feature, the
+     * site), plus the MODE, plus whether it is the daily-limit variant, which is a different screen
+     * with different copy from a plain `HARD_BLOCK`.
+     *
+     * **Nothing here ticks, and that is deliberate.** `dailyTimeRemainingMs` and the auto-kick
+     * cooldown's `delaySeconds` both count down every second they are read, so including either
+     * would make every re-launch inside the settle window a "different" block and hand back the
+     * duplicate launches [Decision.DROP_ALREADY_PENDING] exists to refuse (issue #36 measured
+     * `wasBlocked` +25 across 10 launches when that guard was absent). A fingerprint over a moving
+     * number is not a fingerprint.
+     */
+    fun decisionFingerprint(
+        attributedPackage: String,
+        blockMode: String,
+        featureKey: String? = null,
+        webDomain: String? = null,
+        dailyLimited: Boolean = false
+    ): String = buildString {
+        append(confrontationKey(attributedPackage, featureKey, webDomain))
+        append("|mode=").append(blockMode)
+        if (dailyLimited) append("|daily")
     }
 
     /**
@@ -621,17 +812,30 @@ object BlockLaunchGate {
      *
      * [id] identifies the ACTIVITY INSTANCE for [pendingOverlayAfterDismissal], which is why a
      * re-delivery keeps the id it already has.
+     *
+     * [decisionKey] is always taken from the launch being made, on both branches. The on-screen
+     * overlay is about to be re-delivered through `onNewIntent` with THIS block's extras, so the
+     * record must describe the block the user is about to see and not the one they saw a moment
+     * ago -- a record that kept the old fingerprint would make the next identical launch look
+     * fresh and the next genuinely-different one look duplicate, i.e. issue #50 inverted.
      */
     fun pendingOverlayAfterLaunch(
         pending: PendingOverlay?,
         target: String,
         nowMs: Long,
-        id: Long
+        id: Long,
+        decisionKey: String
     ): PendingOverlay =
         if (pending != null && pending.packageName == target && pending.windowShown) {
-            pending
+            pending.copy(decisionKey = decisionKey)
         } else {
-            PendingOverlay(packageName = target, launchedAtMs = nowMs, windowShown = false, id = id)
+            PendingOverlay(
+                packageName = target,
+                launchedAtMs = nowMs,
+                windowShown = false,
+                id = id,
+                decisionKey = decisionKey
+            )
         }
 
     /**

@@ -842,7 +842,15 @@ class NudgeAccessibilityService : AccessibilityService() {
             onTimeLimitExceeded = { limitedPackage, dailyLimitMinutes ->
                 launchBlockOverlay(
                     targetPackage = limitedPackage,
-                    attributedPackage = limitedPackage
+                    attributedPackage = limitedPackage,
+                    // The daily-limit variant is a DIFFERENT SCREEN from a plain hard block -- its
+                    // own copy, its own reason -- and it is the one issue #50 was reported on, so
+                    // it says so here rather than collapsing into the mode alone.
+                    decisionKey = BlockLaunchGate.decisionFingerprint(
+                        attributedPackage = limitedPackage,
+                        blockMode = "HARD_BLOCK",
+                        dailyLimited = true
+                    )
                 ) {
                     putExtra(BlockOverlayActivity.EXTRA_BLOCK_MODE, "HARD_BLOCK")
                     putExtra(BlockOverlayActivity.EXTRA_PACKAGE_NAME, limitedPackage)
@@ -1180,7 +1188,27 @@ class NudgeAccessibilityService : AccessibilityService() {
         // nothing — which is how an event type can be "handled" for a year without being handled.
         when (record.type) {
             A11yEventType.WINDOW_STATE_CHANGED,
-            A11yEventType.WINDOWS_CHANGED -> evaluateForegroundPackage(packageName)
+            A11yEventType.WINDOWS_CHANGED -> {
+                // THE SETTLE THAT FINISHES A BLOCK WE RACED OURSELVES OUT OF (issue #58).
+                //
+                // A launch refused with DROP_FOREGROUND_MOVED because the evaluation finished a
+                // few milliseconds after the foreground twitched leaves the user unblocked and
+                // nothing behind to notice: `evaluateForegroundPackage` below finds `lastPackage`
+                // already equal to this package -- the dropped evaluation set it -- and returns on
+                // the same-package debounce. So the block is simply gone.
+                //
+                // The deferral is redeemed by the event the race was about, the target genuinely
+                // in front again, and all it does is spend the debounce so the question is ASKED
+                // once more. It never replays the dropped decision: by now that decision is as old
+                // as issue #50's stale overlay.
+                if (entryPoint.blockLaunchGuard().redeemDeferredLaunch(record.type, signal)) {
+                    entryPoint.nudgeLogger().i(
+                        "re-evaluating a dropped block target=$packageName reason=foreground_settled"
+                    )
+                    lastEvalTime = 0L
+                }
+                evaluateForegroundPackage(packageName)
+            }
 
             A11yEventType.WINDOW_CONTENT_CHANGED -> handleWindowContentChanged(record)
 
@@ -1462,7 +1490,18 @@ class NudgeAccessibilityService : AccessibilityService() {
             entryPoint.nudgeLogger().i(
                 "cooldown enforced package=$packageName remaining=${remainingSeconds}s"
             )
-            launchBlockOverlay(targetPackage = packageName, attributedPackage = packageName) {
+            launchBlockOverlay(
+                targetPackage = packageName,
+                attributedPackage = packageName,
+                // `remainingSeconds` is deliberately NOT part of this: it counts down every time
+                // the cooldown is read, and a fingerprint over a moving number would make every
+                // re-launch inside the settle window look like a different block. See
+                // [BlockLaunchGate.decisionFingerprint].
+                decisionKey = BlockLaunchGate.decisionFingerprint(
+                    attributedPackage = packageName,
+                    blockMode = "DELAY"
+                )
+            ) {
                 putExtra(BlockOverlayActivity.EXTRA_BLOCK_MODE, "DELAY")
                 putExtra(BlockOverlayActivity.EXTRA_DELAY_SECONDS, remainingSeconds)
                 putExtra(BlockOverlayActivity.EXTRA_PACKAGE_NAME, packageName)
@@ -1654,7 +1693,18 @@ class NudgeAccessibilityService : AccessibilityService() {
         entryPoint.nudgeLogger().i(
             "web cooldown enforced domain=$domain remaining=${remainingSeconds}s"
         )
-        launchBlockOverlay(targetPackage = browserPackage, attributedPackage = browserPackage) {
+        launchBlockOverlay(
+            targetPackage = browserPackage,
+            attributedPackage = browserPackage,
+            // The DOMAIN is what makes two web cooldowns different blocks; the browser alone would
+            // collapse every site behind one fingerprint, exactly as it does for
+            // [BlockLaunchGate.confrontationKey].
+            decisionKey = BlockLaunchGate.decisionFingerprint(
+                attributedPackage = browserPackage,
+                blockMode = "DELAY",
+                webDomain = domain
+            )
+        ) {
             putExtra(BlockOverlayActivity.EXTRA_BLOCK_MODE, "DELAY")
             putExtra(BlockOverlayActivity.EXTRA_DELAY_SECONDS, remainingSeconds)
             putExtra(BlockOverlayActivity.EXTRA_PACKAGE_NAME, browserPackage)
@@ -2218,18 +2268,29 @@ class NudgeAccessibilityService : AccessibilityService() {
         val signal = eventClassifier.classifyVerifiedContentChangeAsSwitch(
             record = record,
             currentImePackage = currentImePackage,
+            launcherPackages = launcherPackagesCached,
             pipOnlyPackages = pipOnlyPackagesCached
         )
-        if (signal !is ForegroundSignal.AppWindow) return
+        // The two signals that make a claim about what is in front, and no others. Home joins
+        // AppWindow here for issue #58: the launcher sometimes arrives as a content change and
+        // nothing else, and while it does not, the sitting never ends and a completed delay
+        // survives a trip home. Everything else -- a keyboard, a system surface, our own UI, a PiP
+        // bubble -- is rejected here for free, before the binder read.
+        if (signal !is ForegroundSignal.AppWindow && signal !is ForegroundSignal.Home) return
 
         // Only NOW is the binder read worth paying for, and it is what earns the promotion: a
         // content change claims nothing about the foreground unless its package owns the REAL
         // active window. A null or unreadable window is never a switch -- a false positive costs
         // the user their passthrough, a false negative just retries on the next event.
+        //
+        // It is also the ENTIRE safety margin on the Home promotion. `EventClassifier.classify`
+        // refuses to read a launcher content change as Home because widget churn behind a
+        // fullscreen app is not a departure (#5, #28) -- and such churn cannot reach this line,
+        // because the app, not the launcher, owns the active window while it is in front.
         if (activeWindowPackageOrNull() != packageName) return
 
         entryPoint.nudgeLogger().i(
-            "foreground switch detected from content change package=$packageName"
+            "foreground switch detected from content change package=$packageName signal=$signal"
         )
         // THE SITTING MUST BE UPDATED HERE TOO. This is the service's SECOND entry point into
         // evaluation, and the only one that is not a window event, so the classification at the top
@@ -2238,7 +2299,10 @@ class NudgeAccessibilityService : AccessibilityService() {
         // (exactly the case issue #7 exists for), and the user could switch away for half an hour,
         // come back, and still skip the delay.
         applyForegroundSignal(signal)
-        evaluateForegroundPackage(packageName)
+        // ...and for Home that is the WHOLE job. Ending the sitting is what a trip home means; the
+        // launcher has no rule to evaluate, and running a rule lookup against it would only move
+        // `lastPackage` onto a package nothing blocks.
+        if (signal is ForegroundSignal.AppWindow) evaluateForegroundPackage(packageName)
     }
 
     /**
@@ -2266,6 +2330,10 @@ class NudgeAccessibilityService : AccessibilityService() {
      *   package here would drop every web block ever written.
      * @param attributedPackage what the block is recorded against: the overlay's label, the
      *   `UsageEvent`, the picture-in-picture session record.
+     * @param decisionKey [BlockLaunchGate.decisionFingerprint] for the block about to be shown:
+     *   WHICH block this is, so the gate can tell a genuine duplicate from a stale pending overlay
+     *   describing a block the rules no longer produce (issue #50). No default, for the same
+     *   reason the parameters above have none -- every launch site must say what it is showing.
      * @param extras fills in the intent. Called only when the launch is going to happen.
      * @return false when the gate refused, in which case the caller must not record the block
      *   either, a `UsageEvent` for an overlay nobody saw is the stat inflation issue #19 measured.
@@ -2273,10 +2341,11 @@ class NudgeAccessibilityService : AccessibilityService() {
     private fun launchBlockOverlay(
         targetPackage: String,
         attributedPackage: String,
+        decisionKey: String,
         extras: Intent.() -> Unit
     ): Boolean {
         val guard = entryPoint.blockLaunchGuard()
-        val decision = guard.decide(targetPackage)
+        val decision = guard.decide(targetPackage, decisionKey)
 
         // THE STORM DIAGNOSTIC (issue #36), and it counts ATTEMPTS rather than launches.
         //
@@ -2318,7 +2387,7 @@ class NudgeAccessibilityService : AccessibilityService() {
         // conflating them is what produced two blocks for one app entry: see
         // [BlockLaunchGate.isGenuineBypass]. Keyed on the TARGET, because that is the package whose
         // trailing window events must not be mistaken for the user getting past the overlay.
-        guard.onOverlayLaunched(targetPackage)
+        guard.onOverlayLaunched(targetPackage, decisionKey)
         applicationContext.startActivity(overlayIntent)
         return true
     }
@@ -2359,7 +2428,18 @@ class NudgeAccessibilityService : AccessibilityService() {
                 // So the gate runs before grayscale, before the row, before everything.
                 val launched = launchBlockOverlay(
                     targetPackage = web?.browserPackage ?: packageName,
-                    attributedPackage = packageName
+                    attributedPackage = packageName,
+                    // THE #50 CASE ITSELF. A daily limit raised between two launches changes this
+                    // decision from the daily-limit HARD_BLOCK to an ordinary DELAY, and until the
+                    // gate could see that, the fresh launch was refused as a duplicate of the
+                    // screen the user was trying to get past.
+                    decisionKey = BlockLaunchGate.decisionFingerprint(
+                        attributedPackage = packageName,
+                        blockMode = decision.mode.name,
+                        featureKey = featureKey,
+                        webDomain = web?.domain,
+                        dailyLimited = decision.dailyLimitMinutes != null
+                    )
                 ) {
                     putExtra(BlockOverlayActivity.EXTRA_BLOCK_MODE, decision.mode.name)
                     putExtra(BlockOverlayActivity.EXTRA_DELAY_SECONDS, decision.delaySeconds)
