@@ -13,6 +13,7 @@ import com.astraedus.nudge.data.export.ExportedSettings
 import com.astraedus.nudge.service.GlobalEnabledProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -44,8 +45,25 @@ class NudgePreferences @Inject constructor(
         val PROTECTION_ALERT_SHOWN_AT = longPreferencesKey("protection_alert_shown_at")
     }
 
+    /**
+     * The master toggle.
+     *
+     * `distinctUntilChanged` is load-bearing, not tidiness. DataStore's `data` flow re-emits the
+     * WHOLE preferences snapshot on every write to ANY key, and `map` happily republishes the same
+     * Boolean each time. `NudgeAccessibilityService` collects this and calls
+     * `NudgeMonitorService.sync` on each emission, and `sync` -> `start` -> `onStartCommand` ->
+     * `startForeground` is a notification post — so before this line, every unrelated preference
+     * write in the app (including the one `ProtectionCheck` makes on every watchdog cycle) posted
+     * the ongoing notification again and took a `NotificationManagerService` wakelock for it. That
+     * is one of the three causes of [#63](https://github.com/astraedus/nudge/issues/63), and it is
+     * the one no amount of care inside the service could have fixed.
+     *
+     * Nothing may depend on this re-emitting an unchanged value: that was never a signal, only a
+     * side effect of which key someone else happened to write.
+     */
     override val isGlobalEnabled: Flow<Boolean> = context.dataStore.data
         .map { prefs -> prefs[Keys.GLOBAL_ENABLED] ?: true }
+        .distinctUntilChanged()
 
     suspend fun setGlobalEnabled(enabled: Boolean) {
         context.dataStore.edit { prefs ->
@@ -53,8 +71,10 @@ class NudgePreferences @Inject constructor(
         }
     }
 
+    /** Same reason as [isGlobalEnabled]: this pair drives the monitor service's existence. */
     val isOnboardingComplete: Flow<Boolean> = context.dataStore.data
         .map { prefs -> prefs[Keys.ONBOARDING_COMPLETE] ?: false }
+        .distinctUntilChanged()
 
     suspend fun setOnboardingComplete(complete: Boolean) {
         context.dataStore.edit { prefs ->
