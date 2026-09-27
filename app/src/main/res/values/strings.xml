@@ -33,7 +33,7 @@
          Activity is itself an allowed start), so that is the offer that leads, and the grant is
          offered as what lets Nudge do it unattended. Neither sentence may become a promise. -->
     <string name="protection_alert_blocked_title">Nudge cannot restart itself</string>
-    <string name="protection_alert_blocked_body">Your phone is stopping Nudge from restarting itself, so blocking may not work reliably. Turning on “Display over other apps” helps it restart on its own. Tap for the steps.</string>
+    <string name="protection_alert_blocked_body">Your phone is stopping Nudge from restarting itself, so blocking may not work reliably. Opening Nudge starts it again. Turning on “Display over other apps” helps it restart on its own. Tap for the steps.</string>
 
     <!-- Home-screen widgets (Jetpack Glance): picker labels/descriptions, the Today widget,
          the Blocked-most widget, and the Protection widget. -->
