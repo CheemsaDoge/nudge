@@ -72,6 +72,18 @@ class BlockLaunchGuard @Inject constructor() {
     @Volatile
     private var storm: BlockLaunchGate.LaunchStorm? = null
 
+    /**
+     * A launch we refused because the foreground had moved, waiting for its target to settle
+     * ([BlockLaunchGate.DeferredLaunch], issue #58).
+     *
+     * The one piece of state here written from the IO scope: a decision finishes there, the gate
+     * refuses it there, and the settle that redeems it arrives on the main thread. `@Volatile` plus
+     * the `@Synchronized` mutators is the same discipline every other field in this class has, for
+     * the same reason.
+     */
+    @Volatile
+    private var deferredLaunch: BlockLaunchGate.DeferredLaunch? = null
+
     /** Why the last arrival ended. Diagnostic only; it appears in the storm line. */
     @Volatile
     private var lastDepartureReason: String = "none"
@@ -92,6 +104,27 @@ class BlockLaunchGuard @Inject constructor() {
         walkAway = BlockLaunchGate.walkAwayAfter(signal, walkAway)
         arrival = BlockLaunchGate.arrivalAfterSignal(signal, arrival)
         storm = BlockLaunchGate.stormAfterSignal(signal, storm)
+        deferredLaunch = BlockLaunchGate.deferredLaunchAfterSignal(signal, deferredLaunch)
+    }
+
+    /**
+     * Is this event the settle that redeems a launch we dropped because the foreground had moved?
+     * Consumes the deferral, so one drop buys at most one re-evaluation (issue #58).
+     *
+     * Called from the service's dispatch, AFTER [onForegroundSignal] has applied the same signal:
+     * the deferral's departure rule keeps it alive across a window event for its own target, which
+     * is precisely the event being asked about here.
+     */
+    @Synchronized
+    fun redeemDeferredLaunch(eventType: A11yEventType, signal: ForegroundSignal): Boolean {
+        val redeemed = BlockLaunchGate.isDeferredLaunchRedeemed(
+            deferred = deferredLaunch,
+            eventType = eventType,
+            signal = signal,
+            nowMs = nowMs()
+        )
+        if (redeemed) deferredLaunch = null
+        return redeemed
     }
 
     /**
@@ -108,9 +141,14 @@ class BlockLaunchGuard @Inject constructor() {
      */
     @Synchronized
     fun onDeparture(reason: String) {
-        if (arrival == null && storm == null) return
+        if (arrival == null && storm == null && deferredLaunch == null) return
         arrival = null
         storm = null
+        // A departure the stream cannot describe is still a departure, so a block we owed the user
+        // on their way INTO this app is no longer owed (issue #58). Same rule the ordinary signals
+        // get in `BlockLaunchGate.deferredLaunchAfterSignal`; this is the route for the two that
+        // never reach it.
+        deferredLaunch = null
         lastDepartureReason = reason
     }
 
@@ -127,9 +165,14 @@ class BlockLaunchGuard @Inject constructor() {
         walkAway = BlockLaunchGate.WalkAway(packageName, nowMs())
     }
 
-    /** A block overlay for [packageName] has been started, and has not reached the screen yet. */
+    /**
+     * A block overlay for [packageName] has been started, and has not reached the screen yet.
+     *
+     * @param decisionKey [BlockLaunchGate.decisionFingerprint] for the block being shown, so the
+     *   NEXT launch for this package can ask whether it is the same one (issue #50).
+     */
     @Synchronized
-    fun onOverlayLaunched(packageName: String) {
+    fun onOverlayLaunched(packageName: String, decisionKey: String) {
         val current = pendingOverlay
         pendingOverlay = BlockLaunchGate.pendingOverlayAfterLaunch(
             pending = current,
@@ -139,7 +182,8 @@ class BlockLaunchGuard @Inject constructor() {
                 current.id
             } else {
                 overlayIds.incrementAndGet()
-            }
+            },
+            decisionKey = decisionKey
         )
     }
 
@@ -207,6 +251,15 @@ class BlockLaunchGuard @Inject constructor() {
         val next = BlockLaunchGate.stormAfterLaunch(storm, targetPackage, decision, now)
         val report = BlockLaunchGate.stormReport(next, now)
         storm = if (report == null) next else next.copy(reported = true)
+        // Every launch attempt already passes through here with its verdict, which makes it the one
+        // place that can see a block refused because we raced ourselves -- and therefore the one
+        // place that can remember to finish it (issue #58).
+        deferredLaunch = BlockLaunchGate.deferredLaunchAfterDecision(
+            deferred = deferredLaunch,
+            decision = decision,
+            target = targetPackage,
+            nowMs = now
+        )
         return report
     }
 
@@ -235,14 +288,22 @@ class BlockLaunchGuard @Inject constructor() {
             nowMs = nowMs()
         )
 
-    /** Whether a block overlay for [targetPackage] may still be shown. */
-    fun decide(targetPackage: String): BlockLaunchGate.Decision =
+    /**
+     * Whether a block overlay for [targetPackage] may still be shown.
+     *
+     * @param decisionKey [BlockLaunchGate.decisionFingerprint] for the block being launched. No
+     *   default, deliberately: this is the ONLY production caller of [BlockLaunchGate.decide], and
+     *   a forgotten argument would quietly restore the package-only "already pending" test that
+     *   issue #50 is about.
+     */
+    fun decide(targetPackage: String, decisionKey: String): BlockLaunchGate.Decision =
         BlockLaunchGate.decide(
             target = targetPackage,
             foreground = foregroundPackage,
             walkAway = walkAway,
             nowMs = nowMs(),
-            pendingOverlay = pendingOverlay
+            pendingOverlay = pendingOverlay,
+            decisionKey = decisionKey
         )
 
     /**
@@ -270,6 +331,7 @@ class BlockLaunchGuard @Inject constructor() {
         // claim is dropped in.
         arrival = null
         storm = null
+        deferredLaunch = null
         lastDepartureReason = "reset"
     }
 }

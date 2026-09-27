@@ -37,6 +37,7 @@ class ContentChangeAppSwitchTest {
     private val keep = "com.google.android.keep"
     private val discord = "com.discord"
     private val futo = "org.futo.inputmethod.latin"
+    private val launcher = "com.google.android.apps.nexuslauncher"
 
     private val classifier = EventClassifier(
         ownPackageName = own,
@@ -56,25 +57,38 @@ class ContentChangeAppSwitchTest {
      * Written out here rather than hidden behind a production helper precisely because the ORDER is
      * the contract -- the node read must come last, after everything free has had its say.
      */
-    private fun shouldSwitch(
+    private fun promotedSignal(
         packageName: String,
         lastPackage: String?,
         activeWindowPackage: String?,
-        currentImePackage: String? = futo
-    ): Boolean {
-        if (packageName.isBlank() || packageName == lastPackage) return false
+        currentImePackage: String? = futo,
+        launcherPackages: Set<String> = setOf(launcher)
+    ): ForegroundSignal? {
+        if (packageName.isBlank() || packageName == lastPackage) return null
         val signal = classifier.classifyVerifiedContentChangeAsSwitch(
             record = AccessibilityEventRecord(
                 type = A11yEventType.WINDOW_CONTENT_CHANGED,
                 packageName = packageName
             ),
             currentImePackage = currentImePackage,
+            launcherPackages = launcherPackages,
             pipOnlyPackages = emptySet()
         )
-        if (signal !is ForegroundSignal.AppWindow) return false
+        // The two signals that make a claim about what is in front. Home joined AppWindow here for
+        // issue #58; everything else is rejected before the binder read, as it always was.
+        if (signal !is ForegroundSignal.AppWindow && signal !is ForegroundSignal.Home) return null
         activeWindowReads++
-        return activeWindowPackage == packageName
+        return if (activeWindowPackage == packageName) signal else null
     }
+
+    private fun shouldSwitch(
+        packageName: String,
+        lastPackage: String?,
+        activeWindowPackage: String?,
+        currentImePackage: String? = futo
+    ): Boolean = promotedSignal(
+        packageName, lastPackage, activeWindowPackage, currentImePackage
+    ) is ForegroundSignal.AppWindow
 
     // --- The issue #7 fix: a verified re-entry is evaluated ---
 
@@ -89,6 +103,62 @@ class ContentChangeAppSwitchTest {
     @Test
     fun `a first-ever event with no known last package is a foreground switch when verified`() {
         assertTrue(shouldSwitch(packageName = keep, lastPackage = null, activeWindowPackage = keep))
+    }
+
+    // --- Issue #58, mechanism 1: a verified launcher content change is HOME ---
+
+    /**
+     * The #58 repro at this layer. The user presses Home and the launcher arrives only as a
+     * content change; it genuinely owns the active window, so it is the home screen, and Home is
+     * the one signal that ends a sitting outright. Promoted to [ForegroundSignal.AppWindow]
+     * instead, it would merely start the two-minute away clock and a reopen three seconds later
+     * would still walk past the completed delay -- which is the bug.
+     */
+    @Test
+    fun `a verified launcher content change is Home, not an app switch`() {
+        assertEquals(
+            ForegroundSignal.Home(launcher),
+            promotedSignal(packageName = launcher, lastPackage = keep, activeWindowPackage = launcher)
+        )
+    }
+
+    /**
+     * THE COUNTERFACTUAL FOR #5 AND #28, and the reason this promotion is safe at all.
+     *
+     * Launcher widgets tick while the user is inside a fullscreen app, and the launcher fires
+     * content changes for them. Those events cannot reach the promotion, because the APP owns the
+     * active window, not the launcher. If this ever starts passing, the verification has been
+     * weakened and a stray widget redraw can revoke a delay somebody earned.
+     */
+    @Test
+    fun `launcher churn behind a fullscreen app is not Home`() {
+        assertEquals(
+            null,
+            promotedSignal(packageName = launcher, lastPackage = keep, activeWindowPackage = keep)
+        )
+    }
+
+    /**
+     * THE PRE-FIX BEHAVIOUR, and it is what a missing launcher set still falls back to: the stock
+     * launchers are in `SYSTEM_PACKAGES`, so the promotion answered "system surface", the service
+     * dropped the event before the binder read, and the sitting was never told the user had gone
+     * home. That is issue #58's mechanism 1 verbatim.
+     */
+    @Test
+    fun `with no launcher packages known the launcher is dropped, exactly as before the fix`() {
+        assertTrue(
+            "this test is only meaningful while the stock launcher IS a system package",
+            launcher in NudgeAccessibilityService.SYSTEM_PACKAGES
+        )
+        assertEquals(
+            null,
+            promotedSignal(
+                packageName = launcher,
+                lastPackage = keep,
+                activeWindowPackage = launcher,
+                launcherPackages = emptySet()
+            )
+        )
     }
 
     // --- Not a switch: the app we are already in ---

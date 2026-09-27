@@ -50,8 +50,11 @@ class OverlayLifecycleGuardTest {
      * does it: mark the overlay started, then start the activity — whose `render` immediately reads
      * back which pending overlay it is.
      */
-    private fun serviceLaunches(target: String): Long {
-        guard.onOverlayLaunched(target)
+    private fun serviceLaunches(
+        target: String,
+        decisionKey: String = delayKey(target)
+    ): Long {
+        guard.onOverlayLaunched(target, decisionKey)
         return guard.currentOverlayId()
     }
 
@@ -141,7 +144,7 @@ class OverlayLifecycleGuardTest {
             "an overlay that is on screen is not an overlay still in flight; a further real " +
                 "confrontation in this app must still get its block",
             BlockLaunchGate.Decision.LAUNCH,
-            guard.decide(KEEP)
+            guard.decide(KEEP, delayKey(KEEP))
         )
 
         // COUNTERFACTUAL: the pre-PR-#40 rule, which reset an on-screen overlay to "not yet shown".
@@ -161,6 +164,132 @@ class OverlayLifecycleGuardTest {
                 nowMs = clock,
                 pendingOverlay = preFixPending
             )
+        )
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // #50 — a stale pending overlay must not swallow a block the rules now produce
+    // ------------------------------------------------------------------------------------------
+
+    /**
+     * ISSUE #50, in the lifecycle ordering that produced it.
+     *
+     * Reported on 1.17.3 device QA: a daily limit already exceeded shows "Daily limit reached", the
+     * user taps "Go Back", raises the limit in Nudge, and cold-launches the app — and meets the
+     * SAME stale screen, while logcat shows the fresh evaluation computing a non-blocking DELAY
+     * with 17 minutes left and the launch refused as `DROP_ALREADY_PENDING`.
+     *
+     * The ordering below is what leaves a pending record with `windowShown = false` under an
+     * activity that is alive and on screen: the daily-limit clock fires a second launch for an
+     * instance that is ALREADY RESUMED, so the delivery arrives through `onNewIntent` and
+     * `onResume` never runs again. Nothing can report that overlay shown, and for the next three
+     * seconds every launch for the app was treated as its duplicate — whatever it was going to
+     * show.
+     */
+    @Test
+    fun `a pending overlay for a block the rules no longer produce does not swallow the fresh one`() {
+        val overlay = OverlayLifecycle()
+        guard.onForegroundSignal(ForegroundSignal.AppWindow(KEEP))
+
+        // The daily-limit hard block goes up and reaches the screen.
+        overlay.onDelivered(serviceLaunches(KEEP, dailyLimitKey(KEEP)))
+        applyToGuard(overlay.onResumed())
+
+        // The user turns around; the activity finishes and is destroyed, clearing its own pending.
+        clock += 4_000
+        applyToGuard(overlay.onWalkAwayRequested(KEEP, "HARD_BLOCK", KEEP))
+        applyToGuard(overlay.onDestroyed())
+
+        // The daily-limit clock ticks again and puts the SAME hard block back up, delivered to an
+        // instance the platform has not torn down yet: onNewIntent, no onResume, windowShown false.
+        clock += 30_000
+        overlay.onDelivered(serviceLaunches(KEEP, dailyLimitKey(KEEP)))
+
+        // Meanwhile the user raises the limit, and the cold launch evaluates to an ordinary DELAY.
+        clock += 500 // well inside OVERLAY_SETTLE_MS
+        assertEquals(
+            "the fresh decision is a DIFFERENT block, so the stale pending overlay is not its " +
+                "duplicate and it must be shown",
+            BlockLaunchGate.Decision.LAUNCH,
+            guard.decide(KEEP, delayKey(KEEP))
+        )
+
+        // COUNTERFACTUAL: the pre-fix rule, which asked only about the package.
+        assertEquals(
+            "the old rule really does drop it -- this is the stale 'Daily limit reached' screen " +
+                "the reporter met instead of their 17 minutes",
+            BlockLaunchGate.Decision.DROP_ALREADY_PENDING,
+            BlockLaunchGate.decide(
+                target = KEEP,
+                foreground = KEEP,
+                walkAway = null,
+                nowMs = clock,
+                pendingOverlay = BlockLaunchGate.PendingOverlay(
+                    packageName = KEEP,
+                    launchedAtMs = clock - 500,
+                    windowShown = false,
+                    id = guard.currentOverlayId(),
+                    decisionKey = dailyLimitKey(KEEP)
+                ),
+                decisionKey = null
+            )
+        )
+    }
+
+    /**
+     * ...and the other direction, which is what keeps this from handing issue #36 back: the SAME
+     * block launched twice inside the settle window is still one block, and the second launch is
+     * still refused. Loosening "already pending" to "never" would put a second overlay and a
+     * second `wasBlocked` row back on every single app entry.
+     */
+    @Test
+    fun `the same block relaunched inside the settle window is still refused`() {
+        val overlay = OverlayLifecycle()
+        guard.onForegroundSignal(ForegroundSignal.AppWindow(KEEP))
+
+        overlay.onDelivered(serviceLaunches(KEEP, dailyLimitKey(KEEP)))
+        clock += 500
+
+        assertEquals(
+            BlockLaunchGate.Decision.DROP_ALREADY_PENDING,
+            guard.decide(KEEP, dailyLimitKey(KEEP))
+        )
+    }
+
+    /**
+     * The pending record must describe the block the user is ABOUT to see, not the one they saw a
+     * moment ago. A re-delivery keeps the on-screen overlay (issue #36) and adopts the new
+     * fingerprint, so the next launch is judged against what is actually on the screen.
+     */
+    @Test
+    fun `a re-delivery updates which block the pending overlay is`() {
+        val overlay = OverlayLifecycle()
+        guard.onForegroundSignal(ForegroundSignal.AppWindow(KEEP))
+
+        val firstId = serviceLaunches(KEEP, dailyLimitKey(KEEP))
+        overlay.onDelivered(firstId)
+        applyToGuard(overlay.onResumed())
+
+        clock += 5_000
+        // The overlay is on screen; a DELAY block is re-delivered into it through onNewIntent.
+        val sameId = serviceLaunches(KEEP, delayKey(KEEP))
+        overlay.onDelivered(sameId)
+        assertEquals("still the same overlay instance", firstId, sameId)
+
+        // It is on screen, so nothing is "already pending" either way; what must have changed is
+        // WHICH block the record describes, and the dismissal-then-relaunch below shows it.
+        applyToGuard(overlay.onDestroyed())
+        overlay.onDelivered(serviceLaunches(KEEP, delayKey(KEEP)))
+        clock += 200
+        assertEquals(
+            "the record now describes the DELAY, so an identical DELAY is its duplicate",
+            BlockLaunchGate.Decision.DROP_ALREADY_PENDING,
+            guard.decide(KEEP, delayKey(KEEP))
+        )
+        assertEquals(
+            "and the daily-limit block is not",
+            BlockLaunchGate.Decision.LAUNCH,
+            guard.decide(KEEP, dailyLimitKey(KEEP))
         )
     }
 
@@ -301,7 +430,7 @@ class OverlayLifecycleGuardTest {
         assertEquals(
             "a departure is in flight; this window is Keep leaving, not the user arriving",
             BlockLaunchGate.Decision.DROP_WALK_AWAY_IN_FLIGHT,
-            guard.decide(KEEP)
+            guard.decide(KEEP, delayKey(KEEP))
         )
 
         // COUNTERFACTUAL: the same instant on a guard that was never told a walk-away started —
@@ -312,7 +441,7 @@ class OverlayLifecycleGuardTest {
         assertEquals(
             "without the armed window the block really does come straight back",
             BlockLaunchGate.Decision.LAUNCH,
-            unarmed.decide(KEEP)
+            unarmed.decide(KEEP, delayKey(KEEP))
         )
     }
 
@@ -361,7 +490,7 @@ class OverlayLifecycleGuardTest {
         assertEquals(
             "the block must not come back over an app the user declined 1.6 seconds ago",
             BlockLaunchGate.Decision.DROP_WALK_AWAY_IN_FLIGHT,
-            guard.decide(KEEP)
+            guard.decide(KEEP, delayKey(KEEP))
         )
 
         // COUNTERFACTUAL: the same run with the window armed only at the tap.
@@ -374,7 +503,7 @@ class OverlayLifecycleGuardTest {
             "armed only at the tap, the window has expired by the time the pop it caused lands " +
                 "(${clock - tapAt}ms elapsed vs a ${BlockLaunchGate.WALK_AWAY_TRANSITION_MS}ms window)",
             BlockLaunchGate.Decision.LAUNCH,
-            tapOnly.decide(KEEP)
+            tapOnly.decide(KEEP, delayKey(KEEP))
         )
     }
 
@@ -435,7 +564,7 @@ class OverlayLifecycleGuardTest {
         assertNotEquals(
             "and Instagram's own block must still be showable: the user never walked away from it",
             BlockLaunchGate.Decision.DROP_WALK_AWAY_IN_FLIGHT,
-            guard.decide(INSTAGRAM)
+            guard.decide(INSTAGRAM, delayKey(INSTAGRAM))
         )
     }
 
@@ -463,7 +592,7 @@ class OverlayLifecycleGuardTest {
         clock += 100
         assertEquals(
             BlockLaunchGate.Decision.DROP_WALK_AWAY_IN_FLIGHT,
-            guard.decide(chrome)
+            guard.decide(chrome, delayKey(chrome))
         )
     }
 }

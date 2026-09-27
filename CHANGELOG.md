@@ -39,6 +39,27 @@ All notable changes to Nudge are documented here. Format follows [Keep a Changel
   app already asks — *have you actually been away?* — so a blink changes nothing, while going to the
   home screen, switching to another app for a couple of minutes, or putting the phone down properly
   all count as leaving, and the next time you open Instagram it takes you to Following again.
+- **Pressing Home and reopening a blocked app sometimes let you straight back in, with no block at
+  all.** Intermittent, and two separate causes behind one symptom
+  ([#58](https://github.com/astraedus/nudge/issues/58)). First: Android does not always tell Nudge
+  the home screen has appeared in the way it expects. On the runs that failed, the launcher showed
+  up only as a background content update and never as "a new screen is in front", so Nudge never
+  registered that you had left the app — and if you never left, the delay you had already completed
+  was still good. Nudge now also accepts the quieter signal, but only after checking that the home
+  screen really is the window in front, so a ticking clock widget behind a fullscreen app still
+  cannot revoke a delay you earned. Second: the block for the reopen was sometimes computed a few
+  milliseconds after the screen had shifted, and Nudge threw it away rather than show it over the
+  wrong app — which is right, except that nothing then finished the job when the app settled. A
+  block dropped for that reason is now remembered and re-decided the moment the app is genuinely in
+  front again, once, and only for that app.
+- **A block screen could be stuck on an answer that was no longer true — most visibly, "Daily limit
+  reached" after you had just raised the limit.** Raise a daily limit you had already used up, open
+  the app, and the old hard block came back even though Nudge had worked out you had seventeen
+  minutes left ([#50](https://github.com/astraedus/nudge/issues/50)). The previous block screen had
+  not fully gone away, and Nudge was refusing the new one as a duplicate of it — on the grounds that
+  it was for the same app, which was the only thing it was checking. It now checks what the block
+  actually IS, so a different decision replaces a stale screen instead of being swallowed by it,
+  while a genuine duplicate for one app entry is still refused exactly as before.
 - **A hold you had already completed could be demanded again, minutes later, while you were still
   sitting in the app.** Screen on, never left, nothing tapped that would explain it — and then the
   block screen, asking for the full sixty seconds over again
