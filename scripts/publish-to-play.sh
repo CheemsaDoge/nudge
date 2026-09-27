@@ -12,11 +12,13 @@
 #   where the gplay admin service-account key lives (chmod 600, never committed).
 #
 # WHAT IT DOES:
-#   1. Resolve the signed AAB for a version (from the GitHub Release, a CI
+#   1. Resolve the USER-FACING release notes: the per-versionCode store-notes file if
+#      it exists (validated, used verbatim), else a loud fallback to CHANGELOG extraction.
+#   2. Resolve the signed AAB for a version (from the GitHub Release, a CI
 #      workflow-run artifact, or an explicit path).
-#   2. gplay preflight  — offline secret/compliance/hygiene scan of the bundle.
-#   3. gplay release     — upload to a track and release it (100% by default).
-#   4. gplay status      — print the resulting release-health snapshot.
+#   3. gplay preflight  — offline secret/compliance/hygiene scan of the bundle.
+#   4. gplay release     — upload to a track and release it (100% by default).
+#   5. gplay status      — print the resulting release-health snapshot.
 #
 # USAGE:
 #   scripts/publish-to-play.sh <version> [aab-path]
@@ -39,6 +41,9 @@
 #     SOURCE=release|run                     (default: release; "run" = pull the
 #                                             AAB from the latest workflow_dispatch
 #                                             run artifact instead of a GH Release)
+#     NOTES_ONLY=1                           (resolve + validate + print the release
+#                                             notes, then exit: preview what the store
+#                                             will say without touching Play at all)
 #
 # EXAMPLES:
 #   # Default: go live to 100% of production users.
@@ -74,14 +79,96 @@ AAB="${2:-}"
 die() { echo "ERROR: $*" >&2; exit 1; }
 
 [ -n "$VERSION" ] || die "version required. Usage: scripts/publish-to-play.sh <version> [aab-path]"
-command -v gplay >/dev/null || die "gplay not on PATH (see ~/ops/references/play-console-cli.md)"
-command -v gh    >/dev/null || die "gh CLI not on PATH"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT
 
-# --- 1. resolve the signed AAB ------------------------------------------------
+# --- 1. release notes ---------------------------------------------------------
+# FIRST, before the AAB download: bad or missing notes are a human fix, and finding that out
+# after pulling a 20MB bundle wastes the trip. NOTES_ONLY=1 stops right after this section.
+# PREFERRED SOURCE: the hand-written, user-facing store notes at
+#   fastlane/metadata/android/en-US/changelogs/<versionCode>.txt
+# (the fastlane convention IzzyOnDroid and F-Droid already read, so one file serves all three
+# stores). CHANGELOG.md is the DEV-facing record — markdown, issue links, long prose about
+# mechanisms — and flattening one into the other is a losing game: v1.18.1's LIVE Play notes read
+# "...reading client messages ([#54](https://github.com/astraedus/nudge/issues/54)). He had not...".
+# The CHANGELOG extraction below stays as the FALLBACK so a release can never be blocked on a
+# missing file, but it announces itself loudly, because shipping it is a defect to fix.
+# shellcheck source=scripts/check-store-notes.sh
+. "$ROOT/scripts/check-store-notes.sh"
+
+# Key the notes on the versionCode as it was AT THE TAG, not in the working tree: publishing an
+# older version from a repo that has since bumped would otherwise pick up the wrong file.
+GRADLE_AT_TAG="$(git -C "$ROOT" show "v${VERSION}:app/build.gradle.kts" 2>/dev/null || true)"
+if [ -n "$GRADLE_AT_TAG" ]; then
+  VERSION_CODE="$(store_notes_parse_version_code <<< "$GRADLE_AT_TAG")"
+else
+  VERSION_CODE="$(store_notes_current_version_code)"
+  echo "WARNING: no tag v${VERSION}; read versionCode $VERSION_CODE from the working tree instead." >&2
+fi
+[ -n "$VERSION_CODE" ] || die "could not resolve a versionCode for v${VERSION}"
+
+STORE_NOTES_FILE="$(store_notes_path "$VERSION_CODE")"
+if [ -f "$STORE_NOTES_FILE" ]; then
+  # Verbatim, or not at all. A store note that breaks a rule is a sentence for a human to rewrite;
+  # "repairing" it here is how a half sentence reaches the listing.
+  validate_store_notes "$STORE_NOTES_FILE" \
+    || die "store notes for versionCode $VERSION_CODE are invalid (see above). Fix the file — this script will not repair it."
+  NOTES="$(cat "$STORE_NOTES_FILE")"
+else
+  echo "STORE NOTES MISSING for vc $VERSION_CODE; falling back to CHANGELOG extraction" >&2
+  echo "  write $STORE_NOTES_FILE before the next release (scripts/check-store-notes.sh)" >&2
+  # Every markdown form has to be flattened here or it ships verbatim. Issue parentheticals go
+  # entirely (a bare issue number means nothing to a store reader and eats the 500-char budget),
+  # any other link keeps its text, and the emphasis/code markers are stripped.
+  NOTES="$(awk -v ver="$VERSION" '
+    $0 ~ "^## \\[" ver "\\]" {grab=1; next}
+    grab && /^## \[/ {exit}
+    grab {print}
+  ' "$ROOT/CHANGELOG.md" \
+    | sed '/^### /d' \
+    | sed -E 's/\(\[#[0-9]+\]\([^)]*\)\)//g' \
+    | sed -E 's/\[([^]]*)\]\([^)]*\)/\1/g' \
+    | sed 's/\*\*//g; s/\*//g; s/`//g; s/^- /• /' \
+    | sed -E 's/[[:space:]]+([.,)])/\1/g' \
+    | grep -v '^[[:space:]]*$')"
+  [ -n "$NOTES" ] && NOTES="What's new in v${VERSION}:
+${NOTES}" || NOTES="Bug fixes and improvements (v${VERSION})."
+  # Google Play hard-caps release notes at 500 chars/locale; trim the FINAL string. Cut back to the
+  # last sentence rather than mid-word: a hard 497-byte slice would have shipped "no block screens,
+  # no delays, no daily limits, an" on v1.18.2. A cap is not a reason to publish a fragment.
+  if [ "${#NOTES}" -gt 497 ]; then
+    NOTES="${NOTES:0:497}"
+    # Whole-string parameter expansion, NOT sed: the notes are MULTI-LINE, and a line-oriented
+    # 's/[^.!?]*$//' strips the tail of EVERY line instead of the tail of the text (it mangled the
+    # whole block on the first attempt). '${NOTES##*[.!?]}' is everything after the last sentence
+    # end, so removing that as a suffix leaves the last complete sentence.
+    TRIMMED="${NOTES%"${NOTES##*[.!?]}"}"
+    # Fail-safe: if the 497-byte window holds no sentence end at all (one very long bullet), fall
+    # back to the last whole WORD plus an ellipsis rather than shipping half a word.
+    [ "${#TRIMMED}" -lt 200 ] && TRIMMED="${NOTES% *}…"
+    NOTES="$TRIMMED"
+  fi
+  # Show what the fallback would actually ship. Flattening markdown is best-effort, not a
+  # guarantee: v1.17.3 still comes out carrying "(#35, asked for by…)" because the issue link sat
+  # inside a larger parenthetical. Warn, never block — a missing notes file must not stop a
+  # release, it must be impossible to ship without noticing.
+  printf '%s\n' "$NOTES" > "$WORKDIR/fallback-notes.txt"
+  validate_store_notes "$WORKDIR/fallback-notes.txt" > /dev/null \
+    || echo "  ^ the CHANGELOG fallback cannot guarantee clean store text. Write the notes file." >&2
+fi
+echo "----- release notes (vc $VERSION_CODE) -----"; echo "$NOTES"; echo "-------------------------"
+
+if [ -n "${NOTES_ONLY:-}" ]; then
+  echo "NOTES_ONLY set — nothing was uploaded."
+  exit 0
+fi
+
+command -v gplay >/dev/null || die "gplay not on PATH (see ~/ops/references/play-console-cli.md)"
+command -v gh    >/dev/null || die "gh CLI not on PATH"
+
+# --- 2. resolve the signed AAB ------------------------------------------------
 if [ -n "$AAB" ]; then
   [ -f "$AAB" ] || die "AAB not found: $AAB"
   echo "Using explicit AAB: $AAB"
@@ -99,42 +186,6 @@ else
   AAB="$(find "$WORKDIR" -name '*.aab' | head -1)"
 fi
 echo "AAB: $AAB ($(du -h "$AAB" | cut -f1))"
-
-# --- 2. release notes from CHANGELOG (Play caps at 500 chars/locale) ----------
-# The CHANGELOG is MARKDOWN and the store field is PLAIN TEXT, so every markup form has to be
-# flattened or it ships verbatim: v1.18.1's LIVE notes read "...reading client messages
-# ([#54](https://github.com/astraedus/nudge/issues/54)). He had not...". Issue parentheticals go
-# entirely (a bare issue number means nothing to a store reader and eats the 500-char budget),
-# any other link keeps its text, and the emphasis/code markers are stripped.
-NOTES="$(awk -v ver="$VERSION" '
-  $0 ~ "^## \\[" ver "\\]" {grab=1; next}
-  grab && /^## \[/ {exit}
-  grab {print}
-' "$ROOT/CHANGELOG.md" \
-  | sed '/^### /d' \
-  | sed -E 's/\(\[#[0-9]+\]\([^)]*\)\)//g' \
-  | sed -E 's/\[([^]]*)\]\([^)]*\)/\1/g' \
-  | sed 's/\*\*//g; s/\*//g; s/`//g; s/^- /• /' \
-  | sed -E 's/[[:space:]]+([.,)])/\1/g' \
-  | grep -v '^[[:space:]]*$')"
-[ -n "$NOTES" ] && NOTES="What's new in v${VERSION}:
-${NOTES}" || NOTES="Bug fixes and improvements (v${VERSION})."
-# Google Play hard-caps release notes at 500 chars/locale; trim the FINAL string. Cut back to the
-# last sentence rather than mid-word: a hard 497-byte slice would have shipped "no block screens,
-# no delays, no daily limits, an" on v1.18.2. A cap is not a reason to publish a fragment.
-if [ "${#NOTES}" -gt 497 ]; then
-  NOTES="${NOTES:0:497}"
-  # Whole-string parameter expansion, NOT sed: the notes are MULTI-LINE, and a line-oriented
-  # 's/[^.!?]*$//' strips the tail of EVERY line instead of the tail of the text (it mangled the
-  # whole block on the first attempt). '${NOTES##*[.!?]}' is everything after the last sentence
-  # end, so removing that as a suffix leaves the last complete sentence.
-  TRIMMED="${NOTES%"${NOTES##*[.!?]}"}"
-  # Fail-safe: if the 497-byte window holds no sentence end at all (one very long bullet), fall
-  # back to the last whole WORD plus an ellipsis rather than shipping half a word.
-  [ "${#TRIMMED}" -lt 200 ] && TRIMMED="${NOTES% *}…"
-  NOTES="$TRIMMED"
-fi
-echo "----- release notes -----"; echo "$NOTES"; echo "-------------------------"
 
 # --- 3. preflight (offline secret/compliance scan) ----------------------------
 echo "Running gplay preflight…"

@@ -4,7 +4,22 @@ All notable changes to Nudge are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+### Changed
+- Release notes on Google Play, IzzyOnDroid and F-Droid now come from per-version store notes
+  written by hand (`fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`) rather than
+  being flattened out of this file. This changelog is the developer-facing record; the store gets
+  a short, plain-text account of what was fixed and what you will notice.
+
 ### Fixed
+- **Opening Instagram to Following no longer overrides you after the screen blinks.** Switch back to
+  the normal Home feed on purpose, read for half a minute without touching anything, let the display
+  time out, tap it back on — and Nudge used to do its two taps again and pull you straight off the
+  feed you had just chosen ([#56](https://github.com/astraedus/nudge/issues/56)). Android turns the
+  display off when you stop *touching* the phone, not when you stop *looking* at it, and the steer
+  was reading that as you coming back for a new visit. It now asks the same question the rest of the
+  app already asks — *have you actually been away?* — so a blink changes nothing, while going to the
+  home screen, switching to another app for a couple of minutes, or putting the phone down properly
+  all count as leaving, and the next time you open Instagram it takes you to Following again.
 - **Pressing Home and reopening a blocked app sometimes let you straight back in, with no block at
   all.** Intermittent, and two separate causes behind one symptom
   ([#58](https://github.com/astraedus/nudge/issues/58)). First: Android does not always tell Nudge

@@ -105,20 +105,36 @@ class HomeScreenPassthroughContractTest {
      * from the sitting transition — instead of two calls this function had to remember. The
      * requirement is unchanged and the "second piece of state to remember" trap is gone, so the
      * assertion moves to where the guarantee now lives.
+     *
+     * **The BEHAVIOUR is proven at L1, not here.** `PassthroughManagerTest`'s *"leaving the browser
+     * clears the domain with everything else"* drives the real manager with a real
+     * `ForegroundSignal.Home` and asserts both `lastPackage` and `lastDomain` come back null.
+     *
+     * This test used to assert three SPELLINGS instead (`"is SittingEvent.Ended -> clear()"`,
+     * `"lastPackage = null"`, `"lastDomain = null"`) and rotted exactly as
+     * `docs/testing-strategy.md` rule (e) predicts: issue
+     * [#56](https://github.com/astraedus/nudge/issues/56) collapsed that three-branch `when` into
+     * one call to the shared `SittingEvent.endedSitting` accessor, the behaviour did not move a
+     * millimetre, and the test failed. Migrated here on the doc's "when next touched" rule, to the
+     * absence the spelling was standing in for.
      */
     @Test
     fun `going home clears both the app and the web passthrough`() {
+        val revoke = passthroughManagerSource
+            .substringAfter("private fun revokeIfSittingEnded(")
+            .substringBefore("\n    fun ")
+            .lines()
+            .joinToString("\n") { it.substringBefore("//") }
+
         assertTrue(
-            "ending a sitting must clear the grant",
-            passthroughManagerSource.contains("is SittingEvent.Ended -> clear()")
+            "the revoke must read the ONE shared unwrapping of 'which sitting ended in this event'",
+            revoke.contains("endedSitting")
         )
-        assertTrue(
-            "clear() must drop the app-level grant",
-            passthroughManagerSource.contains("lastPackage = null")
-        )
-        assertTrue(
-            "clear() must drop the web-domain grant — one call, both axes",
-            passthroughManagerSource.contains("lastDomain = null")
+        assertFalse(
+            "and must not carry its own: three consumers ask whether the user left — the grant, " +
+                "the arrival counter and the Following steer — and every one that answered it " +
+                "itself eventually disagreed with the others (#36, #54, #56)",
+            revoke.contains("is SittingEvent.Started")
         )
         assertTrue(
             "going home must also stop the web foreground-time clock",

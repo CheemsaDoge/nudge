@@ -193,22 +193,31 @@ only then reach for source text.
 `build.gradle.kts` field, a production `const`, or an enum.** Derive it or import it. A hand-typed
 constant makes the test agree with its author instead of with the device, and both sides of the
 comparison then agree on a value that exists nowhere. **This is the second headline practice:** an
-afternoon's work, nothing new in the build, and it closes a bug that is live right now.
+afternoon's work, nothing new in the build, and the afternoon it took closed a bug that was live at
+the time of writing (#33) and had been for months.
 
-Live offenders, all verifiable today:
+**The identity offenders are closed** (#48, then the `InstalledAppsRepositoryTest` tail). `NudgeIdentity`
+reads the `applicationId` off `BuildConfig` and the namespace off a real class, the five files that
+hand-typed `"com.astraedus.nudge"` as the app's own package now derive it, and
+`OwnClassNamespaceContractTest` asserts the two identities are different strings, that both
+production namespaces equal the real one, and that the own-window predicate answers yes for real
+class names and no for the applicationId. `NudgeAccessibilityService.shouldClearForOwnPackageEvent`
+no longer takes an identity parameter at all, so the specific mistake **#33** shipped is a compile
+error rather than something a test has to be watching for — rule (a)'s *make it unwritable* applied
+to the case that wrote this rule. The same pass closed the DB-version and `BlockMode` rows
+(`NUDGE_DB_VERSION` and `BlockMode.entries` are read, not retyped).
+
+One live offender remains:
 
 | Offender | What it retypes | Why it is wrong |
 |---|---|---|
-| `service/PassthroughTest.kt:211` | `const val OWN_PACKAGE = "com.astraedus.nudge"`, fed to **both** sides of every comparison | `namespace` is `com.astraedus.nudge`; `applicationId` is `dev.astraedus.nudge`. This is **#33**: `isOwnAppWindowEvent` can never be true in production, and has been dead for months |
-| `service/TransientWindowTest.kt:26`, `service/HomeScreenPassthroughTest.kt:29`, `service/ContentChangeAppSwitchTest.kt:34`, `data/repository/InstalledAppsRepositoryTest.kt:44` | the same wrong literal | six other files hand-typed the *correct* one, so this is drift, not convention. **No file in the suite imports `BuildConfig.APPLICATION_ID`** |
-| `data/db/NudgeDatabaseMigrationTest.kt:187` | `val currentVersion = 10` | already bit us once: the test sat at 6 while the DB was at 7 (`tasks/lessons.md`, 2026-05-20). Read it from the `@Database` annotation |
-| `data/export/SettingsExportTest.kt:393` | `listOf("NONE", "HARD_BLOCK", "DELAY", "BREATHING")` inside a test named *"every real block mode is accepted"* | it claims exhaustiveness over an enum it does not read. `BlockMode.entries.map { it.name }` makes the claim true, and a new mode then fails the test instead of silently escaping it |
 | `domain/sitting/SittingTrackerTest.kt:19` | a 5-minute `returnWindowMs` where production wires `PASSTHROUGH_RETURN_WINDOW_MS = 2 minutes` | no test verifies that production wires the real constant |
 
-**The repo already solved this once and did not generalise it:** `BlockOverlayLaunchContractTest.kt:357`
-reads the namespace out of `build.gradle.kts` and asserts `MAIN_APP_ACTIVITY_CLASS` equals
-`"$namespace.MainActivity"` — *"the same mismatch that left `shouldClearForOwnPackageEvent` dead for
-months"*. That is the right fix, applied to exactly one constant. Generalise it.
+**Where the generalisation lives now:** `BlockOverlayLaunchContractTest` reads the namespace out of
+`build.gradle.kts` and asserts `MAIN_APP_ACTIVITY_CLASS` equals `"$namespace.MainActivity"` — *"the
+same mismatch that left `shouldClearForOwnPackageEvent` dead for months"*. That was the right fix
+applied to exactly one constant; `NudgeIdentity` (test source) is the same fix applied to the app's
+two identities, and it is what a new fixture reaches for instead of typing either of them out.
 
 ### (c) An accessibility report gets a capture before a fix is designed
 

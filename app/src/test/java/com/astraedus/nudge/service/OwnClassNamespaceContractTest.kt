@@ -122,22 +122,28 @@ class OwnClassNamespaceContractTest {
                 "awareness overlays",
             NudgeAccessibilityService.shouldClearForOwnPackageEvent(
                 eventType = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
-                className = BlockLaunchGate.MAIN_APP_ACTIVITY_CLASS,
-                ownClassNamespace = NudgeAccessibilityService.OWN_CLASS_NAMESPACE
+                className = BlockLaunchGate.MAIN_APP_ACTIVITY_CLASS
             )
         )
         assertFalse(
             NudgeAccessibilityService.shouldClearForOwnPackageEvent(
                 eventType = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
-                className = "com.instagram.android.MainTabActivity",
-                ownClassNamespace = NudgeAccessibilityService.OWN_CLASS_NAMESPACE
+                className = "com.instagram.android.MainTabActivity"
             )
         )
     }
 
     /**
-     * The counterfactual, and the whole reason this file exists: passing the APPLICATION ID where
-     * the namespace belongs makes the predicate unable to fire. That was production for months.
+     * The counterfactual, and the whole reason this file exists: comparing a class name against the
+     * APPLICATION ID makes the predicate unable to fire. That was production for months.
+     *
+     * Asked of [BlockLaunchGate.isOwnNudgeClass] rather than of
+     * `NudgeAccessibilityService.shouldClearForOwnPackageEvent`, because the service predicate no
+     * longer HAS a parameter to pass the wrong identity through: it reads the derived
+     * `OWN_CLASS_NAMESPACE` itself, so that mistake is now a compile error rather than something a
+     * test has to be watching for. The shared predicate underneath still takes the namespace, and
+     * it is the piece that actually did the comparing, so the historic bug stays reproducible on
+     * demand and stays red.
      */
     @Test
     fun `comparing a class name against the applicationId can never match, which was the bug`() {
@@ -145,11 +151,30 @@ class OwnClassNamespaceContractTest {
             assertFalse(
                 "$className does not start with ${NudgeIdentity.APPLICATION_ID} -- this is issue " +
                     "#33 reproduced, and it must stay a test rather than a shipped branch",
-                NudgeAccessibilityService.shouldClearForOwnPackageEvent(
-                    eventType = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
-                    className = className,
-                    ownClassNamespace = NudgeIdentity.APPLICATION_ID
-                )
+                BlockLaunchGate.isOwnNudgeClass(className, NudgeIdentity.APPLICATION_ID)
+            )
+        }
+    }
+
+    /**
+     * Rule (b) turned on this file's own fixture. [realOwnClassNames] carries one name that is
+     * neither a production constant nor derived from a real class, and a prefix test cannot tell a
+     * real class from a plausible-looking string: rename the overlay activity and every assertion
+     * above still passes, over a class that no longer exists. So the name has to name something.
+     */
+    @Test
+    fun `every class name in this fixture names a source file that exists`() {
+        realOwnClassNames.forEach { className ->
+            val relative = "java/" + className.replace('.', '/') + ".kt"
+            val candidates = listOf(
+                File("app/src/main/$relative"),
+                File("src/main/$relative")
+            )
+            assertTrue(
+                "$className must be a class this app really ships, not a string that merely " +
+                    "starts with our namespace -- a retyped class name is the same fixture " +
+                    "dishonesty that hid issue #33",
+                candidates.any { it.exists() }
             )
         }
     }
