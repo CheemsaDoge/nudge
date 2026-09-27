@@ -67,6 +67,13 @@ Two invariants, both pinned by `ServiceLifecycleContractTest`:
   `ForegroundServiceStartNotAllowedException`. An uncaught throw in the one component whose job is
   noticing failure would be its own silent death.
 
+**`start()` returns early when `isRunning` is already true** (v1.18.3). Its KDoc had said "starts
+the service if it is not already running" since the day it was written and nothing implemented it,
+so every caller re-entered `onStartCommand` — and `onStartCommand` has to call `startForeground`,
+which is a notification post. See *The notification is posted on change* below for why that
+mattered. This does not weaken the watchdog: `ProtectionCheck` only calls `start()` when the
+snapshot already says the service is dead, i.e. when `isRunning` is false.
+
 `NudgeMonitorService.isRunning` is a `@Volatile` static set in `onStartCommand` and cleared in
 `onDestroy`. A static is the *honest* signal here precisely because it dies with the process: the
 failure being watched for is the OS killing us, and a killed process comes back with it false.
@@ -303,6 +310,90 @@ If a check returns `notify=<FAULT>` and no record appears, the decision is fine 
 being dropped - check `POST_NOTIFICATIONS` (`adb shell dumpsys package dev.astraedus.nudge | grep
 POST_NOTIFICATIONS`). That distinction is exactly why the verdict is returned in the broadcast
 result and not inferred from the shade.
+
+## The notification is posted on CHANGE, and health is re-evaluated on EVENTS ([#63](https://github.com/astraedus/nudge/issues/63), v1.18.3)
+
+A user on a Pixel 10 Pro / Android 17 read his own battery with BetterBatteryStats and sent us the
+measurement: over **10h24m**, `NotificationManagerService:post:dev.astraedus.nudge` had been taken
+**267 times** — about once every 2.3 minutes, all of it while the phone was trying to sleep — for
+2m49s of user time plus 1m49s of system time and repeated Deep Doze interruptions. He also reported
+the tell that named the mechanism outright: *swipe the permanent notification away and it is back
+within seconds, with no changing text.*
+
+There is no platform-side dedup to hide behind. `NotificationManagerService.enqueueNotification`
+takes its post wakelock before it has looked at the content, so a byte-identical re-post costs
+exactly what a real one costs. Nothing but the app can tell "nothing changed".
+
+**Three separate paths were posting, and all three are closed:**
+
+| Path | What it was | Fix |
+|---|---|---|
+| The health poll | `manager.notify(...)` every 30s, unconditionally — 1200+ a night | `StatusNotificationGate` holds the fingerprint of the copy on screen; `publishHealth` posts only when it differs |
+| Every redundant `start()` | `startForegroundService` re-runs `onStartCommand`, which must call `startForeground`, which is a post | `start()` returns early when `isRunning` |
+| `isGlobalEnabled` re-emitting | DataStore's `data` flow re-emits the whole snapshot on a write to **any** key; `NudgeAccessibilityService` collects it and calls `sync` on each emission — so `ProtectionCheck`'s own per-cycle write posted the notification | `distinctUntilChanged` on `isGlobalEnabled` and `isOnboardingComplete` in `NudgePreferences` |
+
+The third is the one worth remembering: a file with no clock in it was posting on a schedule,
+driven by a write in a different subsystem. Nothing may now depend on those two flows re-emitting
+an unchanged value — that was never a signal, only a side effect of which key someone else wrote.
+
+### Event first, timeout second
+
+`HEALTH_POLL_INTERVAL_MS` went from **30 seconds to 5 minutes**, and is now a backstop rather than
+the mechanism. The original justification here — "poll rather than observe: the system unbound our
+service fires no callback we can receive in a process that was not running at the time" — is true,
+and it is an argument for `ProtectionWatchdogWorker`, not for a timer inside a process that *is*
+running. In a live process the unbind DOES fire a callback: `AccessibilityConnectionSignal`, raised
+from the accessibility service's own `onServiceConnected` and `onDestroy` (the same signal the
+Settings screen already uses, part 3 above). The master toggle is a Flow. So the service now waits
+on `merge(connection signal, master toggle)` with `withTimeoutOrNull(HEALTH_POLL_INTERVAL_MS)`, and
+both sources are filtered against **what the last evaluation saw** rather than dropped by position —
+otherwise a change landing between finishing an evaluation and starting to listen again would be
+slept through for the whole interval.
+
+Two properties this relies on, both verified rather than assumed:
+
+- A `kotlinx.coroutines.delay` holds no wakelock and schedules no alarm. It does not wake a dozing
+  phone; it simply does not fire until the CPU is up for some other reason. The delay was never the
+  Doze breaker — the `notify()` inside each tick was.
+- Dismissal on Android 14+ does **not** stop a foreground service. `FLAG_ONGOING_EVENT` stopped
+  preventing swipe-dismiss in Android 14, so the user genuinely can clear this notification, and the
+  service keeps running and keeps enforcing.
+
+### The swipe is answered with silence, deliberately
+
+When a user dismisses the ongoing notification we do **not** re-post it. Blocking does not depend on
+it, the service is unaffected, and re-posting is precisely the every-few-seconds resurrection the
+bug report described. It returns on the next genuine state change — which is the only time it has
+anything new to say. The gate therefore has no `reset()`: there is nothing that should clear it.
+
+**Cost accepted:** alert latency on a fault that emits no event at all is now up to 5 minutes to the
+first sighting instead of 30 seconds. There is no known reachable fault of that shape — disabling
+the permission unbinds the service (an event), and a process kill takes this service with it (the
+worker's job) — and the confirming-cycle faults were always going to cost a second sighting anyway.
+
+### What the tests own
+
+- `StatusNotificationGateTest` (**L1 pure JVM**) counts POSTS, not internal branches: 121 unchanged
+  evaluations produce 1 post, and the **counterfactual** runs the pre-fix rule over the identical
+  sequence through the identical driver and produces 121. A state flip produces exactly 1, and 500
+  further identical evaluations after a dismissal produce 0.
+- `MonitorServiceContractTest` owns what no JVM test can see — that the service still *asks*: there
+  is exactly one `notify()` and it sits inside a `shouldPost()` branch, `onPosted` is recorded after
+  it and never before, `startForeground` has exactly one call site, `start()` early-returns on
+  `isRunning`, `isGlobalEnabled` is `distinctUntilChanged`, the connection signal is read, and the
+  backstop interval is minutes rather than seconds. Each of those was confirmed to FAIL with the
+  guard removed before being committed.
+
+### Measuring it on a device
+
+```bash
+adb shell dumpsys notification --noredact | grep -c 'pkg=dev.astraedus.nudge'
+```
+
+Take that count, leave the phone idle with the screen off for ten minutes, take it again. The
+delta must be **0** while nothing changes, and exactly **1** across a deliberate state flip (turn
+the accessibility service off, or the master toggle). Before this change the same window produced
+roughly twenty.
 
 ## Known limits (deliberate, not oversights)
 

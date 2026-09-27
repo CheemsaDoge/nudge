@@ -5,6 +5,25 @@ All notable changes to Nudge are documented here. Format follows [Keep a Changel
 ## [Unreleased]
 
 ### Fixed
+- **Nudge was waking your phone up all night for nothing.** A user ran Nudge past
+  BetterBatteryStats and sent us the number: over 10 hours and 24 minutes, Nudge had taken the
+  notification-posting wakelock **267 times** — once every couple of minutes, every one of them
+  while the phone was trying to be asleep — holding the CPU awake about five minutes in total and
+  repeatedly knocking the phone out of Deep Doze
+  ([#63](https://github.com/astraedus/nudge/issues/63)). He also spotted the giveaway: swipe the
+  permanent "Nudge is active" notification away and it is back within seconds, saying exactly the
+  same thing. Both had the same cause. Nudge re-posted that notification every thirty seconds,
+  whether or not a single word of it had changed, and Android has no way to know a notification is
+  identical to the one already there — it does the full wake-up-and-post either way. There were two
+  quieter versions of the same mistake underneath: restarting an already-running service re-posted
+  it too, and an internal setting was announcing itself as "changed" every time any *other* setting
+  was written, which triggered exactly that. Now the notification is posted only when its words
+  actually change, and Nudge notices a problem by being told about it rather than by waking up to
+  ask. An untouched Nudge sitting in your pocket overnight should now cost nothing measurable at
+  all. One deliberate change of behaviour comes with it: on Android 14 and newer, where you are
+  allowed to swipe the ongoing notification away, it now stays away. Blocking keeps working exactly
+  as before — the notification is not what enforces anything — and it comes back the moment Nudge
+  has something new to tell you, such as blocking having stopped.
 - **A hold you had already completed could be demanded again, minutes later, while you were still
   sitting in the app.** Screen on, never left, nothing tapped that would explain it — and then the
   block screen, asking for the full sixty seconds over again
