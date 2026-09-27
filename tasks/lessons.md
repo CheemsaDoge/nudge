@@ -979,3 +979,25 @@ duplicate of it.
   verbatim in the issue: his numbered steps are the test plan, and "sometimes after a few minutes"
   is the detail that says *armed at an unpredictable moment*, which is what a one-shot timestamp
   with no expiry looks like from outside.
+
+## 2026-09-27: a document written for developers reached a store listing
+
+v1.18.1's live Play notes read "...reading client messages ([#54](https://github.com/astraedus/
+nudge/issues/54)). He had not...". Nobody wrote that for a store; `publish-to-play.sh` extracted
+it from CHANGELOG.md and flattened the markdown, and one link form survived the flattening.
+
+- **Two audiences is two artefacts, not one artefact and a filter.** The CHANGELOG explains a
+  mechanism to a developer; the store field is a paragraph a stranger reads on a phone before
+  deciding to update. Their content genuinely differs, so a transform can at best produce a
+  truncated version of the wrong document. Store notes are now hand-written per versionCode at
+  `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`.
+- **Pick the path another tool already agrees on.** That path is the fastlane convention
+  IzzyOnDroid and F-Droid already read, so one file serves three stores and nothing has to be
+  kept in sync.
+- **A flattener cannot be proven right; a validator can.** The extraction still emits
+  `(#35, asked for by…)` for v1.17.3, because that issue link sat inside a larger parenthetical.
+  The fallback is kept (a missing file must not block a release) but it announces itself, and now
+  runs its own output through the validator so what it would ship is visible before it ships.
+- **Gate it where the mistake is made.** `scripts/check-store-notes.sh` runs in CI on every push
+  to main, not only on the tag: the versionCode bump and the notes belong in the same commit, and
+  main is where that commit lands. Catching it at the tag is catching it after the decision.
