@@ -198,7 +198,7 @@ private fun PermissionsPage(
         PermissionCard(
             icon = Icons.Outlined.Layers,
             title = "Display Over Other Apps",
-            description = "Shows the delay countdown or breathing exercise overlay on top of blocked apps. This is how Nudge presents the pause before opening.",
+            description = "Shows the delay countdown or breathing exercise overlay on top of blocked apps — this is how Nudge presents the pause before opening. Granting it also helps Nudge restart its own protection if Android stops it in the background. Either way, opening Nudge yourself always brings blocking back if it's stopped.",
             onClick = onGrantOverlay
         )
 

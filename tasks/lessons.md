@@ -980,6 +980,43 @@ duplicate of it.
   is the detail that says *armed at an unpredictable moment*, which is what a one-shot timestamp
   with no expiry looks like from outside.
 
+## 2026-09-27, issue #63: an unconditional re-post is a wakeup, and DataStore re-emits on every key
+
+A user measured us with BetterBatteryStats and handed over a number no log of ours could have
+produced: `NotificationManagerService:post:dev.astraedus.nudge` taken **267 times in 10h24m**,
+Deep Doze broken all night. `NudgeMonitorService` re-posted its ongoing notification on every 30s
+health tick whether or not a word of it had changed.
+
+- **"It is the same content, so it is free" is false, and the platform will not save you.**
+  `NotificationManagerService` takes its post wakelock before it has looked at what you sent, so a
+  byte-identical re-post costs exactly what a real one costs. Any periodic `notify()` needs a
+  content fingerprint in front of it. The same applies to `startForeground`—it is a post.
+- **The report named the mechanism and we nearly filed it as one bug.** "Swipe it away and it comes
+  back in seconds with no changing text" IS "something re-posts on a timer". Reading it as a
+  dismissal bug would have sent us hunting a `setDeleteIntent` that does not exist.
+- **The third cause was in a file with no clock in it.** `NudgePreferences.isGlobalEnabled` was
+  `dataStore.data.map { … }` with no `distinctUntilChanged`, and DataStore re-emits the WHOLE
+  snapshot on a write to ANY key. `NudgeAccessibilityService` collects that flow and calls
+  `NudgeMonitorService.sync` on each emission → `start` → `onStartCommand` → `startForeground` → a
+  post. So `ProtectionCheck`'s own once-per-cycle write posted the notification. **A `map` over
+  `DataStore.data` without `distinctUntilChanged` is a re-emission on every unrelated write**—
+  check every collector of such a flow for a side effect before assuming it is only a read.
+- **`start()` had always documented the guard it did not have.** Its KDoc said "starts the service
+  if it is not already running" and there was no `if (isRunning) return`. A doc comment is not a
+  guard; if the sentence is the invariant, the first line of the function should be it.
+- **The poll's own justification did not survive being read.** "The system unbound our service
+  fires no callback we can receive in a process that was not running at the time" is an argument
+  for the WorkManager watchdog, not for a 30s timer inside a process that IS running—where the
+  unbind fires `AccessibilityConnectionSignal`, which this app already had, and which the Settings
+  screen was already using for the same question. Before tuning an interval, ask whether the thing
+  being polled for already emits.
+- **A plain `delay()` is not the Doze breaker.** It holds no wakelock and schedules no alarm; it
+  just does not fire until the CPU is up anyway. Lengthening the interval alone would have reduced
+  the symptom and left the bug. Gate the side effect, then lengthen the interval because it is now
+  only a backstop.
+- **Count the thing the user counted.** `StatusNotificationGateTest` asserts POSTS, with the
+  pre-fix rule run over the same sequence through the same driver (121 vs 1). A test asserting
+  "the gate returned false" passes on a build that ignores the gate.
 ## 2026-09-27: a document written for developers reached a store listing
 
 v1.18.1's live Play notes read "...reading client messages ([#54](https://github.com/astraedus/

@@ -239,6 +239,127 @@ class MonitorServiceContractTest {
         )
     }
 
+    // --- 3b. The notification is posted on CHANGE, never on a clock (issue #63) --------------------
+
+    /**
+     * The defect: `NudgeMonitorService` called `notify()` on every health-poll tick, unconditionally.
+     *
+     * A user on a Pixel 10 Pro measured it with BetterBatteryStats — the
+     * `NotificationManagerService:post:dev.astraedus.nudge` wakelock taken **267 times in 10h24m**,
+     * ~5 minutes of CPU held overnight, Deep Doze repeatedly broken — and reported the tell that
+     * names the cause: swipe the permanent notification away and it is back in seconds, with
+     * identical text. `NotificationManagerService` takes that wakelock before it has looked at the
+     * content, so there is no platform dedup to save us: a byte-identical re-post costs a real one.
+     *
+     * `StatusNotificationGateTest` owns the decision (with the counterfactual: 121 unchanged
+     * evaluations cost 121 posts under the old rule and 1 under this one). What no JVM test can see
+     * is whether this file still ASKS, so that is pinned here — the same split as
+     * `ProtectionCheck`/`ProtectionWatchdog` one section up.
+     */
+    @Test
+    fun `the ongoing notification is only posted when its words change`() {
+        val body = code(read(monitorService))
+
+        assertTrue(
+            "NudgeMonitorService must consult StatusNotificationGate - the fix is the gate, not " +
+                "a longer interval, because a longer interval still posts for nothing",
+            body.contains("StatusNotificationGate()") && body.contains("notificationGate")
+        )
+
+        val notifyCalls = Regex("""\bmanager\.notify\(""").findAll(body).count()
+        assertEquals(
+            "there must be exactly one notify() call in this service, so there is exactly one " +
+                "place the gate has to hold",
+            1,
+            notifyCalls
+        )
+        assertTrue(
+            "the notify() must sit INSIDE a shouldPost() branch. An ungated notify is the whole " +
+                "of issue #63, and it reads identically to a gated one at a glance.",
+            body.indexOf("notificationGate.shouldPost(") in 0 until body.indexOf("manager.notify(")
+        )
+        assertTrue(
+            "onPosted must be recorded AFTER the notify, never before: a notify that throws " +
+                "(a revoked POST_NOTIFICATIONS grant on some OEM builds) must not leave the gate " +
+                "believing something is on screen that never arrived",
+            body.indexOf("manager.notify(") < body.lastIndexOf("notificationGate.onPosted(")
+        )
+    }
+
+    /**
+     * The second post path, and the one that was invisible. Every `startForegroundService` re-runs
+     * `onStartCommand`, and `onStartCommand` MUST call `startForeground`, which is another post.
+     * `NudgeAccessibilityService` calls `sync` from its `isGlobalEnabled` collector, and DataStore
+     * re-emits the whole snapshot on a write to ANY key — including the write `ProtectionCheck`
+     * makes on every watchdog cycle. So the ongoing notification was being re-posted on a schedule
+     * nobody had designed, from a file that contains no clock.
+     *
+     * Two guards, because either alone leaves the path open: the service refuses a redundant start,
+     * and the flow stops re-emitting an unchanged value.
+     */
+    @Test
+    fun `a redundant start cannot re-post the notification`() {
+        val body = code(read(monitorService))
+
+        assertTrue(
+            "start() must return early when the service is already running - its own KDoc has " +
+                "always said 'if it is not already running', and until #63 nothing implemented it",
+            Regex("""fun start\([^)]*\)[^{]*\{\s*if \(isRunning\) return""").containsMatchIn(body)
+        )
+        assertEquals(
+            "startForeground must be called from exactly one place. It is a post, and a second " +
+                "caller would be a second uncounted one.",
+            1,
+            Regex("""\bstartForeground\(""").findAll(body).count()
+        )
+
+        val preferences = code(
+            File(
+                sourceRoot(),
+                "java/com/astraedus/nudge/data/preferences/NudgePreferences.kt"
+            ).readText()
+        )
+        assertTrue(
+            "isGlobalEnabled must be distinctUntilChanged. DataStore's data flow re-emits on " +
+                "every write to every key, and NudgeAccessibilityService turns each emission into " +
+                "NudgeMonitorService.sync -> start -> startForeground -> a notification post.",
+            Regex("""isGlobalEnabled[\s\S]{0,300}?distinctUntilChanged\(\)""")
+                .containsMatchIn(preferences)
+        )
+    }
+
+    /**
+     * Health is re-evaluated on the EVENTS that change it, with the interval as a backstop.
+     *
+     * The old comment argued "poll rather than observe: the system unbound our service fires no
+     * callback we can receive in a process that was not running at the time". True, and an argument
+     * for `ProtectionWatchdogWorker` — not for a 30-second timer inside a process that IS running,
+     * where an unbind fires `AccessibilityConnectionSignal` from the accessibility service's own
+     * `onDestroy`. The timer was doing work the signal already does, 1200 times a night.
+     */
+    @Test
+    fun `health re-evaluation is driven by the signals, not only by the clock`() {
+        val body = code(read(monitorService))
+
+        assertTrue(
+            "the service must re-evaluate on AccessibilityConnectionSignal - that signal IS the " +
+                "unbind, and waiting out an interval for something that already fired is the " +
+                "wakeup nobody needed",
+            body.contains("AccessibilityConnectionSignal.generation")
+        )
+        assertTrue(
+            "the wait must be bounded by HEALTH_POLL_INTERVAL_MS as a backstop, not replaced by " +
+                "the events: a fault that announces nothing must still be found eventually",
+            body.contains("withTimeoutOrNull(HEALTH_POLL_INTERVAL_MS)")
+        )
+        assertTrue(
+            "the backstop interval must be minutes, not seconds. At 30s it was the single " +
+                "largest source of the #63 wakelock storm, and with the gate in place a shorter " +
+                "interval buys only wakeups.",
+            NudgeMonitorService.HEALTH_POLL_INTERVAL_MS >= 60_000L
+        )
+    }
+
     // --- 4. Enforcement stays gated on a rule that still exists ------------------------------------
 
     /**

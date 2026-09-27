@@ -31,7 +31,35 @@ enum class ProtectionFault {
      * `BIND_FOREGROUND_SERVICE_WHILE_AWAKE` protection has lapsed. We can restart it ourselves, so
      * it is only worth a notification once a restart has demonstrably failed to hold.
      */
-    MONITOR_SERVICE_DEAD
+    MONITOR_SERVICE_DEAD,
+
+    /**
+     * We tried to restart the foreground service and the platform refused the start outright.
+     *
+     * Since Android 12 an app may not start a foreground service from the background, and a
+     * watchdog is a background caller by definition. The documented exemption list does not
+     * include a bound accessibility service and does not include a WorkManager expedited job, so
+     * neither of the two things Nudge actually runs in the background qualifies on its own: the
+     * `SYSTEM_ALERT_WINDOW` ("display over other apps") grant is the only thing that has ever made
+     * this start legal. Onboarding lets that permission be skipped, and on such a phone EVERY
+     * restart we attempt is denied - the service stays dead, the watchdog cannot heal it, and the
+     * only trace is a `system_server_wtf` entry in dropbox that no user will ever read. That
+     * silence was the whole of GitHub issue #62; the caught exception was correct, and nothing
+     * carried the refusal any further.
+     *
+     * **This gets more common, not less.** Android 16 narrows the `SYSTEM_ALERT_WINDOW` exemption
+     * to apps that currently have a VISIBLE overlay window, so holding the permission stops being
+     * sufficient there. A fault that was a misconfigured minority is on its way to being the
+     * ordinary case, which is the argument for surfacing it at all rather than logging it. There
+     * is also no API that can ask in advance whether a start would be allowed, so attempt and
+     * catch is the only shape this can take, and this value is what carries the answer onward.
+     *
+     * Kept separate from [MONITOR_SERVICE_DEAD] for the usual reason: the recovery differs. That
+     * fault sends the user to their phone's battery and autostart settings, which would do nothing
+     * here. This one has a fix the user can actually perform, so it supersedes it on the cycle
+     * where both are true.
+     */
+    MONITOR_START_BLOCKED
 }
 
 /** Everything the watchdog is allowed to look at, gathered by the caller. */
@@ -120,6 +148,13 @@ object ProtectionWatchdog {
             // We restarted it last cycle and it is dead again, so the restart did not hold —
             // that is a phone actively shutting us down, which the user can act on.
             ProtectionFault.MONITOR_SERVICE_DEAD -> snapshot.wasDegradedLastCheck
+
+            // Unreachable from here, and deliberately spelled out rather than swept into an
+            // `else`. Whether the platform will REFUSE a restart is only knowable once one has
+            // been attempted, which is [faultToReport]'s half of the policy; nothing in a
+            // snapshot can imply it. Keeping the `when` exhaustive is what forces the next fault
+            // anyone adds to be thought about here too, instead of defaulting to silence.
+            ProtectionFault.MONITOR_START_BLOCKED -> false
         }
 
         return WatchdogDecision(
@@ -128,6 +163,60 @@ object ProtectionWatchdog {
             dismissNotification = false,
             degradedNow = true
         )
+    }
+
+    /**
+     * The fault to actually report, once the verdict from [decide] has been carried out.
+     *
+     * [decide] cannot answer this on its own. Whether the platform will let us restart the
+     * foreground service is only knowable AFTER `NudgeMonitorService.start()` has been attempted,
+     * and the attempt is the caller's to make - so the refusal comes back here as a second pure
+     * step rather than as a signal in [ProtectionSnapshot] that nothing could have filled in yet.
+     * Keeping it pure keeps every rule below in one unit-tested place; the caller stays a carrier
+     * of verdicts with no policy of its own.
+     *
+     * The rules, each with the reason it exists:
+     *
+     * - **Nothing was refused: the verdict stands unchanged.** This function is on the path of
+     *   every single check, so the no-refusal case has to be byte-identical to the behaviour that
+     *   shipped before it existed, or a fix for a permission almost nobody lacks would have
+     *   rewritten the alert everyone else gets.
+     * - **Never nag a user who opted out.** The master toggle being off means they chose this, and
+     *   [decide] already refuses to speak for them; a refusal must not become a back door around
+     *   that rule.
+     * - **An accessibility fault outranks the refusal.** If the verdict was
+     *   [ProtectionFault.ACCESSIBILITY_DISABLED] or [ProtectionFault.ACCESSIBILITY_CRASHED] then
+     *   blocking is ACTUALLY dead, which is strictly worse than having lost the process priority
+     *   that protects it, and each of those recoveries (re-grant, off-and-on again) brings the
+     *   service back with it anyway.
+     * - **One confirming cycle, exactly as [ProtectionFault.MONITOR_SERVICE_DEAD] has.**
+     *   `NudgeMonitorService.isRunning` is an in-process flag, so the FIRST check after ANY process
+     *   start reports the service dead and attempts a start. Alerting on that single sighting would
+     *   fire on every boot, on every app update, and on every time the OS restarted us.
+     * - **The same 12-hour cooldown.** A phone in this state refuses every restart, so without the
+     *   shared clock this would be an alert every 15 minutes forever - and a notification the user
+     *   learns to swipe away is worth less than none. One clock, one persisted timestamp: a second
+     *   one would drift out of step with the first and quietly double the noise.
+     */
+    fun faultToReport(
+        snapshot: ProtectionSnapshot,
+        decision: WatchdogDecision,
+        startRefused: Boolean
+    ): ProtectionFault? {
+        if (!startRefused) return decision.notifyOf
+        if (!snapshot.globalEnabled) return null
+
+        when (decision.notifyOf) {
+            ProtectionFault.ACCESSIBILITY_DISABLED,
+            ProtectionFault.ACCESSIBILITY_CRASHED -> return decision.notifyOf
+
+            else -> Unit
+        }
+
+        if (!snapshot.wasDegradedLastCheck) return null
+        if (!cooledDown(snapshot)) return null
+
+        return ProtectionFault.MONITOR_START_BLOCKED
     }
 
     private fun quiet() = WatchdogDecision(

@@ -48,6 +48,13 @@ object ProtectionAlertNotifier {
             ProtectionFault.MONITOR_SERVICE_DEAD ->
                 context.getString(R.string.protection_alert_service_title) to
                     context.getString(R.string.protection_alert_service_body)
+
+            // Different recovery again, and the one recovery the user can definitely perform:
+            // this phone is refusing every restart we attempt, and the overlay permission is what
+            // lifts that refusal. Telling this user about battery settings would be a dead end.
+            ProtectionFault.MONITOR_START_BLOCKED ->
+                context.getString(R.string.protection_alert_blocked_title) to
+                    context.getString(R.string.protection_alert_blocked_body)
         }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
@@ -82,6 +89,14 @@ object ProtectionAlertNotifier {
      * accessibility list. That screen is where the permission row and the Play-mandated prominent
      * disclosure dialog live (`docs/play-store.md` — this app has been rejected once on that
      * gate), so routing through it keeps the re-grant flow the one Google reviewed.
+     *
+     * For [ProtectionFault.MONITOR_START_BLOCKED] that destination is also the CURE, not only the
+     * explanation. Landing here brings `MainActivity` to the foreground, and a visible Activity is
+     * an allowed foreground-service start on every API level where the background start is
+     * refused, so `MainActivity.retryRefusedServiceStartOnResume` restarts the service the moment
+     * this notification is tapped, whatever the user then does about the permission. That is a
+     * designed property of the pair, not a coincidence: neither the tap target nor that observer
+     * may be changed without the other.
      */
     private fun settingsIntent(context: Context): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {

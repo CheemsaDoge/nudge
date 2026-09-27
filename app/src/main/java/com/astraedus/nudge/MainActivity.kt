@@ -24,6 +24,7 @@ import com.astraedus.nudge.ui.widget.WidgetDeepLink
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -51,6 +52,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         keepMonitorServiceInSync()
+        retryRefusedServiceStartOnResume()
         requestNotificationPermissionIfNeeded()
 
         deepLinkRoute = routeFrom(intent)
@@ -126,14 +128,15 @@ class MainActivity : ComponentActivity() {
      *
      * Gated on onboarding too, so a first-run user is not shown a notification claiming Nudge is
      * monitoring before they have granted it anything to monitor with.
+     *
+     * It covers those three moments and no others, because it only fires when the pair of flags
+     * CHANGES. Healing a service that died while the flags stood still is the sibling observer's
+     * job: see [retryRefusedServiceStartOnResume].
      */
     private fun keepMonitorServiceInSync() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                combine(
-                    nudgePreferences.isGlobalEnabled,
-                    nudgePreferences.isOnboardingComplete
-                ) { enabled, onboarded -> enabled && onboarded }
+                shouldMonitor()
                     .distinctUntilChanged()
                     .collect { shouldMonitor ->
                         // sync(), not start()/stop() by hand: one lifecycle API, so "the service
@@ -141,6 +144,59 @@ class MainActivity : ComponentActivity() {
                         // than at each of the four call sites that can change the answer.
                         NudgeMonitorService.sync(this@MainActivity, shouldMonitor)
                     }
+            }
+        }
+    }
+
+    /**
+     * Should monitoring be running right now: the master toggle AND onboarding, in one place.
+     *
+     * Extracted rather than written out at both observers below. The two ask the same question for
+     * different reasons - one watches for the answer to change, the other wants today's answer on
+     * every resume - and two hand-written copies of it would be two things to keep in step.
+     */
+    private fun shouldMonitor() = combine(
+        nudgePreferences.isGlobalEnabled,
+        nudgePreferences.isOnboardingComplete
+    ) { enabled, onboarded -> enabled && onboarded }
+
+    /**
+     * Brings the foreground service back on resume when the platform refused to let the watchdog
+     * do it (GitHub issue #62).
+     *
+     * Android 12+ forbids starting a foreground service from the background. The documented
+     * exemption list covers neither a bound accessibility service nor a WorkManager expedited job,
+     * so the "display over other apps" grant is the only thing that has ever made the watchdog's
+     * start legal, and onboarding lets the user skip it. On such a phone
+     * `NudgeMonitorService.start()` is denied every time the watchdog tries, and the watchdog has
+     * no other way to heal it.
+     *
+     * **A visible Activity is its own entry on that exemption list**, and it is the one we can
+     * reach from here, so a start made on resume cannot be refused on any API level. That matters
+     * more over time, not less: Android 16 narrows the overlay-permission exemption to apps that
+     * currently have a visible overlay window, so granting the permission stops being sufficient
+     * there and this observer becomes the reliable healer rather than the backstop.
+     *
+     * This has to be its own observer: [keepMonitorServiceInSync] is `distinctUntilChanged` over
+     * the same two flags, so for a returning user whose flags have not moved it emits nothing at
+     * all. The app would sit in the foreground, with the user looking straight at it, and never
+     * retry the start that only it is allowed to make.
+     *
+     * Gated on [NudgeMonitorService.isRunning] deliberately. An unconditional `sync()` on every
+     * resume would re-enter `onStartCommand` on a perfectly healthy service and re-post its ongoing
+     * notification, which is issue #63; this must repair a dead service without touching a live one.
+     *
+     * Do not "simplify" this away into [keepMonitorServiceInSync]. The protection alert's own tap
+     * target is this Activity, so with this observer in place **tapping the alert heals the fault
+     * it is reporting**, before the user has read a word of it. Delete this and that stops being
+     * true, silently, with every other test still green.
+     */
+    private fun retryRefusedServiceStartOnResume() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                if (shouldMonitor().first() && !NudgeMonitorService.isRunning) {
+                    NudgeMonitorService.start(this@MainActivity)
+                }
             }
         }
     }
