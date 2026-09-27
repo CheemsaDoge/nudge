@@ -31,6 +31,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # FIRST, before any JVM work: the user-facing store notes for this versionCode must
+      # exist and be plain text. v1.18.1 shipped to the LIVE Play listing with a raw markdown
+      # issue link in it, because the notes were derived from CHANGELOG.md — dev-facing prose
+      # with links and markup. They are their own artefact now, and this is the gate. Runs on
+      # BOTH paths: a `v*` tag (the release that ships) and a push to main (which catches
+      # "bumped versionCode, forgot the notes" before anyone cuts the tag).
+      # Costs ~1s and needs no toolchain, so it fails fast and cheap.
+      - name: Check store release notes
+        run: |
+          scripts/test-store-notes.sh   # the validator itself still rejects every markup class
+          scripts/check-store-notes.sh  # …and this release's notes pass it
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

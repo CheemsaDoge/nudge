@@ -3,6 +3,7 @@ package com.astraedus.nudge.service
 import com.astraedus.nudge.domain.events.ForegroundSignal
 import com.astraedus.nudge.domain.sitting.SittingEvent
 import com.astraedus.nudge.domain.sitting.SittingTracker
+import com.astraedus.nudge.domain.sitting.endedSitting
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -175,14 +176,17 @@ class PassthroughManager @Inject constructor() {
         sitting.onObservationResumed()
     }
 
+    /**
+     * A departure revokes the grant, whichever shape it arrives in.
+     *
+     * A `Started` that replaced nothing is the first sitting of the process; there is no grant to
+     * revoke. One that replaced a sitting must revoke it, same as an outright `Ended`. That
+     * unwrapping is [endedSitting]'s, not this method's — the service asks the same question to end
+     * the arrival and the Following steer's visit, and three copies of it is how two of them come to
+     * disagree.
+     */
     private fun revokeIfSittingEnded(event: SittingEvent) {
-        when (event) {
-            is SittingEvent.Unchanged -> Unit
-            is SittingEvent.Ended -> clear()
-            // A Started that replaced nothing is the first sitting of the process; there is no grant
-            // to revoke. One that replaced a sitting must revoke it, same as an outright end.
-            is SittingEvent.Started -> if (event.ended != null) clear()
-        }
+        if (event.endedSitting != null) clear()
     }
 
     fun isGranted(packageName: String): Boolean = packageName == lastPackage

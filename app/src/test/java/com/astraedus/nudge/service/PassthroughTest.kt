@@ -384,8 +384,7 @@ class PassthroughTest {
         assertFalse(
             NudgeAccessibilityService.shouldClearForOwnPackageEvent(
                 eventType = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
-                className = "android.widget.TextView",
-                ownClassNamespace = NudgeIdentity.CLASS_NAMESPACE
+                className = "android.widget.TextView"
             )
         )
     }
@@ -395,8 +394,7 @@ class PassthroughTest {
         assertTrue(
             NudgeAccessibilityService.shouldClearForOwnPackageEvent(
                 eventType = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
-                className = "com.astraedus.nudge.MainActivity",
-                ownClassNamespace = NudgeIdentity.CLASS_NAMESPACE
+                className = "com.astraedus.nudge.MainActivity"
             )
         )
     }
@@ -406,8 +404,7 @@ class PassthroughTest {
         assertFalse(
             NudgeAccessibilityService.shouldClearForOwnPackageEvent(
                 eventType = AccessibilityEvent.TYPE_VIEW_CLICKED,
-                className = "com.astraedus.nudge.MainActivity",
-                ownClassNamespace = NudgeIdentity.CLASS_NAMESPACE
+                className = "com.astraedus.nudge.MainActivity"
             )
         )
     }

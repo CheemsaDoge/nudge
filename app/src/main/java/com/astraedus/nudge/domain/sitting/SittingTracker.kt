@@ -38,6 +38,27 @@ sealed interface SittingEvent {
 }
 
 /**
+ * The sitting this event ENDED, if it ended one — the one answer to *"has the user left?"*.
+ *
+ * A departure reaches its consumers in two shapes: an outright [SittingEvent.Ended] (Home), and a
+ * [SittingEvent.Started] carrying the sitting it replaced (a return past the return window, an app
+ * switch past it, a grant earned elsewhere). Both mean the same thing, and every consumer that
+ * unwrapped them itself was one more place the answer could drift —
+ * [com.astraedus.nudge.service.PassthroughManager] revoking the grant and
+ * `NudgeAccessibilityService` ending the arrival, the steer's visit and the counter's session, all
+ * from their own `when`. This is that unwrapping, once.
+ *
+ * The `when` is exhaustive rather than an `is Ended` plus an `else`, so a new [SittingEvent]
+ * variant forces a decision in this one place instead of silently inheriting "nobody left".
+ */
+val SittingEvent.endedSitting: SittingEvent.Ended?
+    get() = when (this) {
+        is SittingEvent.Unchanged -> null
+        is SittingEvent.Ended -> this
+        is SittingEvent.Started -> ended
+    }
+
+/**
  * The ONE definition of "the user is in a sitting with app X".
  *
  * ## The bug this replaces

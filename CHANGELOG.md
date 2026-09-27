@@ -4,6 +4,12 @@ All notable changes to Nudge are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+### Changed
+- Release notes on Google Play, IzzyOnDroid and F-Droid now come from per-version store notes
+  written by hand (`fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`) rather than
+  being flattened out of this file. This changelog is the developer-facing record; the store gets
+  a short, plain-text account of what was fixed and what you will notice.
+
 ### Fixed
 - **Nudge was waking your phone up all night for nothing.** A user ran Nudge past
   BetterBatteryStats and sent us the number: over 10 hours and 24 minutes, Nudge had taken the
@@ -24,6 +30,15 @@ All notable changes to Nudge are documented here. Format follows [Keep a Changel
   allowed to swipe the ongoing notification away, it now stays away. Blocking keeps working exactly
   as before — the notification is not what enforces anything — and it comes back the moment Nudge
   has something new to tell you, such as blocking having stopped.
+- **Opening Instagram to Following no longer overrides you after the screen blinks.** Switch back to
+  the normal Home feed on purpose, read for half a minute without touching anything, let the display
+  time out, tap it back on — and Nudge used to do its two taps again and pull you straight off the
+  feed you had just chosen ([#56](https://github.com/astraedus/nudge/issues/56)). Android turns the
+  display off when you stop *touching* the phone, not when you stop *looking* at it, and the steer
+  was reading that as you coming back for a new visit. It now asks the same question the rest of the
+  app already asks — *have you actually been away?* — so a blink changes nothing, while going to the
+  home screen, switching to another app for a couple of minutes, or putting the phone down properly
+  all count as leaving, and the next time you open Instagram it takes you to Following again.
 - **A hold you had already completed could be demanded again, minutes later, while you were still
   sitting in the app.** Screen on, never left, nothing tapped that would explain it — and then the
   block screen, asking for the full sixty seconds over again

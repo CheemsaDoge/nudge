@@ -1017,3 +1017,49 @@ health tick whether or not a word of it had changed.
 - **Count the thing the user counted.** `StatusNotificationGateTest` asserts POSTS, with the
   pre-fix rule run over the same sequence through the same driver (121 vs 1). A test asserting
   "the gate returned false" passes on a build that ignores the gate.
+## 2026-09-27: a document written for developers reached a store listing
+
+v1.18.1's live Play notes read "...reading client messages ([#54](https://github.com/astraedus/
+nudge/issues/54)). He had not...". Nobody wrote that for a store; `publish-to-play.sh` extracted
+it from CHANGELOG.md and flattened the markdown, and one link form survived the flattening.
+
+- **Two audiences is two artefacts, not one artefact and a filter.** The CHANGELOG explains a
+  mechanism to a developer; the store field is a paragraph a stranger reads on a phone before
+  deciding to update. Their content genuinely differs, so a transform can at best produce a
+  truncated version of the wrong document. Store notes are now hand-written per versionCode at
+  `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`.
+- **Pick the path another tool already agrees on.** That path is the fastlane convention
+  IzzyOnDroid and F-Droid already read, so one file serves three stores and nothing has to be
+  kept in sync.
+- **A flattener cannot be proven right; a validator can.** The extraction still emits
+  `(#35, asked for by…)` for v1.17.3, because that issue link sat inside a larger parenthetical.
+  The fallback is kept (a missing file must not block a release) but it announces itself, and now
+  runs its own output through the validator so what it would ship is visible before it ships.
+- **Gate it where the mistake is made.** `scripts/check-store-notes.sh` runs in CI on every push
+  to main, not only on the tag: the versionCode bump and the notes belong in the same commit, and
+  main is where that commit lands. Catching it at the tag is catching it after the decision.
+
+## A parameter that exists so a test can pass the WRONG value is the reintroduction path (2026-09-27, issue #33)
+
+#33 was fixed in PR #48: `shouldClearForOwnPackageEvent` had been comparing accessibility class
+names against the `applicationId` (`dev.astraedus.nudge`) instead of the class `namespace`
+(`com.astraedus.nudge`), so the `own_app_window` clear was dead on every device for months. The fix
+derived the namespace from a real class and pinned both identities to the real build.
+
+It also left the identity as a **parameter**, so the test could hand the predicate the applicationId
+and prove it can never match. That reads like rigour and is actually the last door left open: the
+only way to write #33 again at that call site was for a caller to pass the wrong identity, and the
+parameter is what makes that expressible. Closed by deleting it -- the predicate reads the derived
+namespace itself, and the counterfactual moved down onto `BlockLaunchGate.isOwnNudgeClass`, the
+shared predicate that actually did the comparing, which keeps its parameter because the pure gate
+has no other way to be told. Same evidence, and the mistake is now a compile error.
+
+`docs/testing-strategy.md` rule (a) already says it in the general form -- *ask whether the
+invariant can be made unwritable before you police it* -- and this is what the ordering looks like
+in practice: the strongest test for a class of bug is often the deletion that makes the bug
+unwritable, and only what survives that deletion is worth a test.
+
+Second, narrower: a prefix assertion cannot tell a real class from a plausible-looking string. The
+contract test fixture listed `"com.astraedus.nudge.ui.overlay.BlockOverlayActivity"`, and renaming
+that activity would have left every assertion in the file green over a class the app no longer
+ships. A fixture full of class names owes one test that each of them names a file that exists.

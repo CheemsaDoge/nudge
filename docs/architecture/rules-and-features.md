@@ -103,8 +103,38 @@ Measured on Instagram 447.0.0.55.81 (Pixel 3, fixtures in `app/src/test/resource
 `FollowingSteer` is a pure state machine with the clock injected. One attempt per home-feed arrival, a bounded
 wait for the menu, then give up silently. Observing the Following screen marks the arrival attempted, so a user
 who backs out of Following to Home on purpose is NOT steered again until they leave Instagram or visit another
-tab. Leaving the app or visiting another tab resets. Anything unrecognised inside Instagram (the reel player, a
-story, a DM thread) changes nothing at all.
+tab. Anything unrecognised inside Instagram (the reel player, a story, a DM thread) changes nothing at all.
+
+### The visit lifecycle: two resets, and only two
+
+The steer's "already steered this arrival" memory is cleared by exactly two things, and which is which matters.
+
+1. **Another tab**, inside Instagram, decided by the steer itself from `HostSurface.OTHER_TAB`. A real
+   navigation away from the feed; the next return to Home is a fresh arrival. The sitting never hears about
+   it — it is one app throughout.
+2. **A departure**, decided by nobody in this file. `NudgeAccessibilityService.onSittingEnded` calls
+   `resetHostAppActuation`, so the steer's verdict is literally the same object's verdict that revokes a
+   completed delay: `SittingTracker`'s. Home ends a visit at once; another app in front, or a dark screen, ends
+   it only past `PASSTHROUGH_RETURN_WINDOW_MS`.
+
+The reset used to live in `hideAllOverlays`, which the `ACTION_SCREEN_OFF` receiver calls
+([#56](https://github.com/astraedus/nudge/issues/56)). That is the premise
+[#54](https://github.com/astraedus/nudge/issues/54) had already removed from the sitting and the arrival:
+Android blanks the display on lack of INPUT, not lack of attention, and the Pixel default is 30 seconds — so
+reading the Home feed you deliberately switched back to, letting it time out and tapping it back on cost you two
+synthetic taps out of that feed. Only the LENGTH of an absence can tell a display timeout from putting the phone
+down, and one object already measures it.
+
+**There is deliberately no third rule and no second timer.** #28, #36, #54 and #56 were all one subsystem
+holding two definitions of "the user left", so a new reason to forget a visit has to become a new
+`SittingEndCause` rather than a new listener. `FollowingSteerVisitWiringContractTest` pins the set of reasons;
+`FollowingSteerVisitLifecycleTest` drives the real `SittingTracker` against the real `FollowingSteer` and carries
+the pre-fix wire as a counterfactual. Neither can see the device, and there is still no `a11y-capture` of a steer
+session — recording one needs a bench device with Instagram signed in.
+
+`SyntheticClickWindow` (the "was that click ours?" suppressor for the counter) is cleared alongside the steer,
+purely because it is the same kind of state — a fact about what Nudge just did inside someone else's app. Its
+window is one second and expires on its own, so where it is reset changes nothing observable.
 
 ## Adding another app
 

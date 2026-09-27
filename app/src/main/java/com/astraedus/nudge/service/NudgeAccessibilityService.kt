@@ -26,6 +26,7 @@ import com.astraedus.nudge.domain.interaction.SyntheticClickWindow
 import com.astraedus.nudge.domain.lock.StrictModeEscapeGuard
 import com.astraedus.nudge.domain.sitting.SittingEndCause
 import com.astraedus.nudge.domain.sitting.SittingEvent
+import com.astraedus.nudge.domain.sitting.endedSitting
 import com.astraedus.nudge.domain.model.BlockDecision
 import com.astraedus.nudge.domain.model.BlockMode
 import com.astraedus.nudge.domain.model.WebBlockMode
@@ -467,16 +468,24 @@ class NudgeAccessibilityService : AccessibilityService() {
          * Is this a window event for one of OUR OWN windows, i.e. should the awareness overlays be
          * cleared because Nudge itself came forward?
          *
-         * @param ownClassNamespace [OWN_CLASS_NAMESPACE] in production. A parameter so the test can
-         *   prove the predicate against the REAL value AND against the applicationId that broke it.
+         * **Takes no identity argument, deliberately.** It reads [OWN_CLASS_NAMESPACE], which is
+         * derived from a real class, and there is no parameter for a caller to hand it the
+         * applicationId instead. That was the one remaining way to write issue #33 again at this
+         * layer, and `docs/testing-strategy.md` rule (a) asks first whether an invariant can be
+         * made unwritable rather than policed. It can, so it is: the fix is no longer something a
+         * test has to notice.
+         *
+         * The counterfactual that reproduces #33 still exists, one level down, on
+         * [BlockLaunchGate.isOwnNudgeClass], the shared predicate this delegates to, which keeps
+         * its namespace parameter so `OwnClassNamespaceContractTest` can show that a class name
+         * tested against the applicationId matches nothing, ever.
          */
         internal fun shouldClearForOwnPackageEvent(
             eventType: Int,
-            className: String?,
-            ownClassNamespace: String
+            className: String?
         ): Boolean {
             return eventType in WINDOW_CHANGE_EVENT_TYPES &&
-                BlockLaunchGate.isOwnNudgeClass(className, ownClassNamespace)
+                BlockLaunchGate.isOwnNudgeClass(className, OWN_CLASS_NAMESPACE)
         }
 
         // "Is this Nudge's own MAIN app window?" (issue #36) is deliberately NOT here, next to its
@@ -608,7 +617,15 @@ class NudgeAccessibilityService : AccessibilityService() {
                 // own definition of genuine. The departure is now raised from [onSittingEvent],
                 // when the sitting actually ends on cause SCREEN_OFF -- one definition, both
                 // consumers. See that method for why the other two end causes do not route there.
-                // The awareness overlays and the clocks belong to a screen nobody is looking at.
+                //
+                // The STEER's "already steered this arrival" does not end here either, for the same
+                // reason and one release later (issue #56): this line used to reach it through
+                // `hideAllOverlays`, so a thirty-second display timeout on the Home feed re-steered
+                // a user who had deliberately switched back to it. That memory now dies where the
+                // sitting does, in [onSittingEnded].
+                //
+                // What DOES belong here is only what is being drawn: the awareness overlays, the
+                // cover and the clocks behind them belong to a screen nobody is looking at.
                 hideAllOverlays()
             }
         }
@@ -1169,6 +1186,7 @@ class NudgeAccessibilityService : AccessibilityService() {
         // not app-blocking enforcement.
         if (!globalEnabledCached) {
             hideAllOverlays()
+            resetHostAppActuation("globally_disabled")
             return
         }
 
@@ -1264,14 +1282,19 @@ class NudgeAccessibilityService : AccessibilityService() {
      * earned in `BlockOverlayActivity` and used to move the sitting with nobody listening.
      */
     private fun onSittingEvent(event: SittingEvent) {
+        // Exhaustive rather than an `is Unchanged` guard, so a new SittingEvent variant forces a
+        // decision here instead of silently inheriting "log nothing".
         when (event) {
             is SittingEvent.Unchanged -> return
-            is SittingEvent.Ended -> onSittingEnded(event)
-            is SittingEvent.Started -> {
-                event.ended?.let(::onSittingEnded)
+            is SittingEvent.Ended -> Unit
+            is SittingEvent.Started ->
                 entryPoint.nudgeLogger().i("sitting started package=${event.packageName}")
-            }
         }
+        // ONE unwrapping of "which sitting ended in this event", shared with `PassthroughManager`'s
+        // revocation — a departure reaches us as an outright `Ended` (Home) or as a `Started`
+        // carrying the sitting it replaced (a return past the window), and every consumer that
+        // unwrapped that itself was one more place the answer could drift.
+        event.endedSitting?.let(::onSittingEnded)
         // A new sitting means a new screen: scroll sources from the old one must not be able to
         // count, or to hold the primary-source election, in the new one.
         interactionHandler.onSittingChanged()
@@ -1307,13 +1330,19 @@ class NudgeAccessibilityService : AccessibilityService() {
         if (ended.cause == SittingEndCause.SCREEN_OFF) {
             entryPoint.blockLaunchGuard().onDeparture("screen_off")
         }
+        // THE STEER'S VISIT ENDS HERE TOO, on every cause, and nowhere else (issue #56). All three
+        // causes are departures by the only definition this app has left -- Home, another app in
+        // front past the return window, or a screen dark past the same window -- and the steer must
+        // not own a fourth opinion about what leaving means. The narrower alternative, resetting
+        // only on SCREEN_OFF next to the line above, would have left "press Home, come straight
+        // back" unable to re-steer at all, which the 1.18.0 changelog explicitly promises it does.
+        resetHostAppActuation("sitting_ended_${ended.cause}")
     }
 
     private fun isOwnAppWindowEvent(event: AccessibilityEvent): Boolean {
         return shouldClearForOwnPackageEvent(
             eventType = event.eventType,
-            className = event.className?.toString(),
-            ownClassNamespace = OWN_CLASS_NAMESPACE
+            className = event.className?.toString()
         )
     }
 
@@ -1765,8 +1794,17 @@ class NudgeAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * Hide the awareness overlays (interaction counter + time-remaining). Called on the accessibility
-     * hot path (already the main thread) when Nudge is globally disabled, so no stale overlay lingers.
+     * Hide everything Nudge is currently DRAWING: the awareness overlays (interaction counter +
+     * time-remaining) and the tab cover, plus the clocks behind them.
+     *
+     * Two callers, and they want the same thing for different reasons: Nudge going globally
+     * disabled must behave as if uninstalled, and a screen that has just gone dark owes no overlay
+     * to anyone. Both are safe to repeat, and both leave the next foreground evaluation free to put
+     * a cover straight back if the rule still says so.
+     *
+     * Deliberately does NOT touch [followingSteer] or [syntheticClicks] — see
+     * [resetHostAppActuation] for why a dark screen is not the end of a visit
+     * ([#56](https://github.com/astraedus/nudge/issues/56)).
      */
     private fun hideAllOverlays() {
         stopForegroundTimeTicker("globally_disabled")
@@ -1777,12 +1815,46 @@ class NudgeAccessibilityService : AccessibilityService() {
             // The cover is enforcement, so it goes with the rest of it: a globally-disabled Nudge
             // must behave as if uninstalled, and a screen nobody is looking at owes no cover either.
             entryPoint.tabCoverOverlayManager().hide()
-            // The steer's "already done this arrival" is about a visit that has now ended.
-            followingSteer.reset()
-            syntheticClicks.reset()
         } catch (e: Exception) {
             entryPoint.nudgeLogger().w("overlay hide-all failed", e)
         }
+    }
+
+    /**
+     * Forget everything Nudge has DONE inside a host app on this visit: the steer's "already steered
+     * this arrival" memory, and the record of the clicks it dispatched.
+     *
+     * ## The bug this closes ([#56](https://github.com/astraedus/nudge/issues/56))
+     *
+     * These two lines used to live in [hideAllOverlays], which the `ACTION_SCREEN_OFF` receiver
+     * calls — carrying the comment *"the steer's 'already done this arrival' is about a visit that
+     * has now ended"*. That is the exact premise
+     * [#54](https://github.com/astraedus/nudge/issues/54) removed everywhere else: Android blanks
+     * the display on lack of INPUT, not lack of attention, and the Pixel default is 30 seconds. So
+     * read the Home feed for half a minute without touching the screen, let the display time out,
+     * tap it back on — and the steer, freshly reset with Instagram still in front, dragged the user
+     * off the feed they had deliberately chosen. 1.18.0's changelog promised the opposite: *"Nudge
+     * will not drag you out of it again until your next visit."*
+     *
+     * The fix is not another rule about screen-offs. It is that the steer now takes its "this is a
+     * new visit" verdict from **the same place the grant takes it from** — [onSittingEnded], i.e.
+     * [com.astraedus.nudge.domain.sitting.SittingTracker]'s departure verdict, which already knows
+     * that a blink is not a departure and that two minutes away is. #36, #54 and #64 were all one
+     * subsystem holding two definitions of "the user left"; this is the third of them being
+     * deleted rather than fixed in place. There is deliberately **no second timer here**.
+     *
+     * Also called when Nudge goes globally disabled, where the reasoning is the older one: a
+     * disabled Nudge behaves as if uninstalled, so a memory of what it did inside someone else's
+     * app has to go with it.
+     *
+     * [syntheticClicks] comes along because it is the same kind of state — a fact about what WE
+     * just did — though moving it changes nothing observable: its window is one second and expires
+     * on its own long before any of these callers fire.
+     */
+    private fun resetHostAppActuation(reason: String) {
+        entryPoint.nudgeLogger().d("host-app actuation reset reason=$reason")
+        followingSteer.reset()
+        syntheticClicks.reset()
     }
 
     /**
@@ -1815,6 +1887,9 @@ class NudgeAccessibilityService : AccessibilityService() {
             // block after the user switches back on. "No claim" never suppresses anything.
             entryPoint.blockLaunchGuard().reset()
             hideAllOverlays()
+            // A disabled Nudge behaves as if uninstalled, so the steer's memory of what it did
+            // inside the host app goes too. This is the ONE reset that is not a departure verdict.
+            resetHostAppActuation("globally_disabled")
         }
     }
 
