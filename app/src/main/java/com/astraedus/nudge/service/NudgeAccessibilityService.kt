@@ -467,16 +467,24 @@ class NudgeAccessibilityService : AccessibilityService() {
          * Is this a window event for one of OUR OWN windows, i.e. should the awareness overlays be
          * cleared because Nudge itself came forward?
          *
-         * @param ownClassNamespace [OWN_CLASS_NAMESPACE] in production. A parameter so the test can
-         *   prove the predicate against the REAL value AND against the applicationId that broke it.
+         * **Takes no identity argument, deliberately.** It reads [OWN_CLASS_NAMESPACE], which is
+         * derived from a real class, and there is no parameter for a caller to hand it the
+         * applicationId instead. That was the one remaining way to write issue #33 again at this
+         * layer, and `docs/testing-strategy.md` rule (a) asks first whether an invariant can be
+         * made unwritable rather than policed. It can, so it is: the fix is no longer something a
+         * test has to notice.
+         *
+         * The counterfactual that reproduces #33 still exists, one level down, on
+         * [BlockLaunchGate.isOwnNudgeClass], the shared predicate this delegates to, which keeps
+         * its namespace parameter so `OwnClassNamespaceContractTest` can show that a class name
+         * tested against the applicationId matches nothing, ever.
          */
         internal fun shouldClearForOwnPackageEvent(
             eventType: Int,
-            className: String?,
-            ownClassNamespace: String
+            className: String?
         ): Boolean {
             return eventType in WINDOW_CHANGE_EVENT_TYPES &&
-                BlockLaunchGate.isOwnNudgeClass(className, ownClassNamespace)
+                BlockLaunchGate.isOwnNudgeClass(className, OWN_CLASS_NAMESPACE)
         }
 
         // "Is this Nudge's own MAIN app window?" (issue #36) is deliberately NOT here, next to its
@@ -1312,8 +1320,7 @@ class NudgeAccessibilityService : AccessibilityService() {
     private fun isOwnAppWindowEvent(event: AccessibilityEvent): Boolean {
         return shouldClearForOwnPackageEvent(
             eventType = event.eventType,
-            className = event.className?.toString(),
-            ownClassNamespace = OWN_CLASS_NAMESPACE
+            className = event.className?.toString()
         )
     }
 
