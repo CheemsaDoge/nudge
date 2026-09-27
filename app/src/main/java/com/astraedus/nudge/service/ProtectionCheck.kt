@@ -2,6 +2,7 @@ package com.astraedus.nudge.service
 
 import android.content.Context
 import com.astraedus.nudge.data.preferences.NudgePreferences
+import com.astraedus.nudge.domain.health.ProtectionFault
 import com.astraedus.nudge.domain.health.ProtectionSnapshot
 import com.astraedus.nudge.domain.health.ProtectionWatchdog
 import com.astraedus.nudge.domain.health.WatchdogDecision
@@ -32,6 +33,12 @@ import kotlinx.coroutines.flow.first
  * service is not stopped blocking", the confirming cycle, the 12-hour cooldown) are all in
  * [ProtectionWatchdog], which is pure and unit-tested, because the failure they exist for, a phone
  * quietly killing Nudge at 3am, is not reproducible on a device at all.
+ *
+ * That holds for the refusal path too. Whether the platform will allow the foreground-service
+ * restart is only knowable after the attempt, so this function makes the attempt and then asks
+ * `ProtectionWatchdog.faultToReport` what to say about it. The alternative - an `if` here saying
+ * "refused, so alert" - would have put the confirming-cycle and cooldown rules in two places, and
+ * the copy of them living here would be the one no unit test could reach.
  */
 object ProtectionCheck {
 
@@ -54,7 +61,13 @@ object ProtectionCheck {
         val snapshot: ProtectionSnapshot,
         val decision: WatchdogDecision,
         /** True when the platform refused the background foreground-service start. */
-        val monitorServiceStartRefused: Boolean
+        val monitorServiceStartRefused: Boolean,
+        /**
+         * The fault actually posted, which is [WatchdogDecision.notifyOf] only when nothing was
+         * refused. Carried separately so QA reads what the user was told rather than what the
+         * verdict would have said before the refusal was known.
+         */
+        val reportedFault: ProtectionFault?
     ) {
         fun summary(): String = buildString {
             append("global=").append(snapshot.globalEnabled)
@@ -66,6 +79,7 @@ object ProtectionCheck {
             append(" dismiss=").append(decision.dismissNotification)
             append(" startService=").append(decision.startMonitorService)
             append(" degradedNow=").append(decision.degradedNow)
+            append(" reported=").append(reportedFault?.name ?: "none")
             if (monitorServiceStartRefused) append(" (service start REFUSED by platform)")
         }
     }
@@ -104,20 +118,27 @@ object ProtectionCheck {
             }
         }
 
+        // The verdict could not know whether the restart would be allowed - only the attempt
+        // above can answer that - so the fault the user hears about is decided here, from the
+        // same pure policy, and everything downstream follows THIS value rather than the verdict.
+        val fault = ProtectionWatchdog.faultToReport(snapshot, decision, startRefused)
+
         if (decision.dismissNotification) ProtectionAlertNotifier.dismiss(appContext)
-        decision.notifyOf?.let { fault ->
-            logger.w("Watchdog: protection degraded ($fault), alerting the user", tag = TAG)
-            ProtectionAlertNotifier.notify(appContext, fault)
+        fault?.let { reported ->
+            logger.w("Watchdog: protection degraded ($reported), alerting the user", tag = TAG)
+            ProtectionAlertNotifier.notify(appContext, reported)
         }
 
         preferences.recordProtectionCheck(
             degraded = decision.degradedNow,
-            // Only advance the cooldown clock when an alert actually went out. Writing `now` on
-            // every run would keep the window permanently open and mute the next real alert.
-            alertShownAtMs = if (decision.notifyOf != null) snapshot.nowMs else null
+            // Only advance the cooldown clock when an alert actually went out, and key it on the
+            // fault that was POSTED. Keying it on the verdict instead would leave the refusal
+            // alert outside its own cooldown, so a phone that refuses every restart would raise
+            // it again every 15 minutes - the exact noise the cooldown exists to prevent.
+            alertShownAtMs = if (fault != null) snapshot.nowMs else null
         )
 
-        return Outcome(snapshot, decision, startRefused)
+        return Outcome(snapshot, decision, startRefused, fault)
     }
 
     private fun entryPoint(context: Context): ProtectionCheckEntryPoint =

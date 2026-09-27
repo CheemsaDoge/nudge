@@ -20,6 +20,20 @@
     <string name="protection_alert_crashed_body">Your phone shut Nudge down. It still shows as switched on, so blocking will not restart on its own — turn Nudge off and back on in Accessibility settings, or restart your phone. Tap for the steps.</string>
     <string name="protection_alert_service_title">Your phone keeps stopping Nudge</string>
     <string name="protection_alert_service_body">Nudge is being shut down in the background, so blocking may not work reliably. Tap to check its status.</string>
+    <!-- The refused-restart case (issue #62). Android 12+ will not let an app start itself in the
+         background without the "display over other apps" permission, which onboarding lets the
+         user skip - so on those phones every restart the watchdog attempts is denied and nothing
+         else can bring monitoring back. Name that permission and nothing else: accessibility is
+         already on for this user, and battery settings would not change the answer.
+
+         Two sentences, in this order, deliberately. Android 16 narrows that permission's
+         exemption to apps holding a VISIBLE overlay window, so merely granting it is no longer a
+         guarantee there - and a body that promised the grant would fix it would be false on the
+         newest phones. Opening Nudge, on the other hand, heals this on every API level (a visible
+         Activity is itself an allowed start), so that is the offer that leads, and the grant is
+         offered as what lets Nudge do it unattended. Neither sentence may become a promise. -->
+    <string name="protection_alert_blocked_title">Nudge cannot restart itself</string>
+    <string name="protection_alert_blocked_body">Your phone is stopping Nudge from restarting itself, so blocking may not work reliably. Turning on “Display over other apps” helps it restart on its own. Tap for the steps.</string>
 
     <!-- Home-screen widgets (Jetpack Glance): picker labels/descriptions, the Today widget,
          the Blocked-most widget, and the Protection widget. -->

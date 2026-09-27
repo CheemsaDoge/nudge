@@ -313,6 +313,85 @@ class ServiceLifecycleContractTest {
     }
 
     /**
+     * Issue #62: the refusal must reach the user, and it must reach them through the ONE alert
+     * owner.
+     *
+     * `NudgeMonitorService.start()` returns false when Android 12+ denies the background
+     * foreground-service start - which it does for the whole life of a phone where the user
+     * skipped "display over other apps". The catch was right; what was missing is that the `false`
+     * went nowhere but a `w`-level log. The watchdog could not heal the service and nothing told
+     * the user why.
+     *
+     * The value-level rules live in `ProtectionWatchdog.faultToReport` and are pinned by
+     * `ProtectionWatchdogTest`. What cannot be pinned there is that this file actually ASKS it:
+     * every one of those unit tests passes just as happily with the call deleted and the old
+     * `decision.notifyOf` posting left in place.
+     */
+    @Test
+    fun `the refused start is reported through the shared policy, not swallowed`() {
+        val text = source(protectionCheck)
+
+        assertTrue(
+            "$protectionCheck must pass the refusal back into the pure policy - the verdict from " +
+                "decide() was formed before the start was attempted and cannot know about it",
+            text.contains("ProtectionWatchdog.faultToReport(")
+        )
+        assertFalse(
+            "$protectionCheck must not post straight from decision.notifyOf any more: that value " +
+                "is blind to the refusal, so a phone that denies every restart would stay silent",
+            Regex("""decision\.notifyOf\s*\?\.let""").containsMatchIn(text)
+        )
+        assertTrue(
+            "the notification must be posted from the reported fault",
+            Regex("""fault\s*\?\.let[\s\S]{0,300}?ProtectionAlertNotifier\.notify\(""")
+                .containsMatchIn(text)
+        )
+        assertFalse(
+            "the 12-hour cooldown must be consumed by the fault that was POSTED, not by the " +
+                "verdict - keyed on decision.notifyOf the refusal alert would sit outside its own " +
+                "cooldown and repeat every 15 minutes",
+            Regex("""alertShownAtMs\s*=\s*if\s*\(\s*decision\.notifyOf""").containsMatchIn(text)
+        )
+        assertTrue(
+            "the cooldown write must follow the reported fault",
+            Regex("""alertShownAtMs\s*=\s*if\s*\(\s*fault\s*!=\s*null""").containsMatchIn(text)
+        )
+    }
+
+    /**
+     * The other half of #62. A refused start leaves the service dead until something starts it
+     * from a context the platform allows, and a visible Activity is one - so opening Nudge should
+     * repair it.
+     *
+     * It did not. `keepMonitorServiceInSync` is `distinctUntilChanged` over the master toggle and
+     * onboarding, and for a returning user neither flag has moved, so the collector emits nothing
+     * at all. The user could sit looking at the app with monitoring dead and no retry would ever
+     * be made. The retry therefore has to be its own RESUMED observer, and it has to be gated on
+     * liveness: an unconditional sync on every resume re-enters `onStartCommand` on a healthy
+     * service and re-posts its ongoing notification, which is issue #63.
+     */
+    @Test
+    fun `MainActivity retries the service start on resume when the service is dead`() {
+        val text = source(mainActivity)
+
+        assertTrue(
+            "$mainActivity must observe RESUMED - a visible Activity is the FGS-start exemption " +
+                "that makes this retry legal on API 31+, and STARTED is not that guarantee",
+            text.contains("Lifecycle.State.RESUMED")
+        )
+        assertTrue(
+            "$mainActivity must gate the retry on NudgeMonitorService.isRunning: starting a live " +
+                "service again re-posts its ongoing notification (issue #63)",
+            text.contains("NudgeMonitorService.isRunning")
+        )
+        assertTrue(
+            "$mainActivity must actually start the service on that path, not only sync it - sync " +
+                "is driven by the flags, and the flags are exactly what has not changed here",
+            text.contains("NudgeMonitorService.start(")
+        )
+    }
+
+    /**
      * `KEEP`, not `REPLACE`: replacing the request on every app launch would push the next run 15
      * minutes out each time, so a user who opens Nudge often would be checked least.
      */

@@ -34,7 +34,8 @@ class ProtectionAlertCopyTest {
     private val resourceStems = mapOf(
         ProtectionFault.ACCESSIBILITY_DISABLED to "protection_alert_accessibility",
         ProtectionFault.ACCESSIBILITY_CRASHED to "protection_alert_crashed",
-        ProtectionFault.MONITOR_SERVICE_DEAD to "protection_alert_service"
+        ProtectionFault.MONITOR_SERVICE_DEAD to "protection_alert_service",
+        ProtectionFault.MONITOR_START_BLOCKED to "protection_alert_blocked"
     )
 
     private val strings: String by lazy {
@@ -115,6 +116,46 @@ class ProtectionAlertCopyTest {
             "The two bodies must not be identical - they are separate faults precisely because " +
                 "they need opposite instructions",
             crashed == disabled
+        )
+    }
+
+    /**
+     * The refused-start alert (issue #62) has exactly one recovery and it is not the one every
+     * other alert in this file names. Android 12+ will not let Nudge start its own foreground
+     * service from the background unless it holds "display over other apps", which onboarding
+     * lets the user skip - so on those phones the watchdog's restart is denied every time, and
+     * granting that permission is the only thing that changes the answer.
+     *
+     * This user's accessibility service is fine. Sending them to the Accessibility screen would
+     * be the same dead end this test file exists to prevent, one permission over.
+     */
+    @Test
+    fun `the blocked alert names the overlay permission, never the accessibility toggle`() {
+        val blocked = string("protection_alert_blocked_body").lowercase()
+
+        assertTrue(
+            "The blocked body must name \"display over other apps\" - that grant IS the fix, " +
+                "and a body that only says the phone is stopping Nudge leaves the user with " +
+                "nothing to do about it.",
+            blocked.contains("display over other apps")
+        )
+        assertFalse(
+            "The blocked body must not send the user to accessibility - theirs is already on, " +
+                "and turning it off to 'fix' this would stop blocking outright.",
+            blocked.contains("accessibility")
+        )
+        assertFalse(
+            "Plain language only: the user does not know what a foreground service is.",
+            blocked.contains("foreground service") || blocked.contains("exemption")
+        )
+        assertTrue(
+            "The blocked body must ALSO offer opening Nudge, and that offer must survive edits. " +
+                "Android 16 narrows the overlay exemption to apps with a currently visible " +
+                "overlay window, so on those phones granting the permission is no longer " +
+                "sufficient and a body resting only on the grant would be false. A visible " +
+                "Activity is an allowed start on every API level, so this is the half that is " +
+                "true everywhere - and MainActivity's resume observer is what makes it true.",
+            blocked.contains("opening nudge")
         )
     }
 }

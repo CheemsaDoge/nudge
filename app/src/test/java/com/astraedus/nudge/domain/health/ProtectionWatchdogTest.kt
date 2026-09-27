@@ -325,6 +325,162 @@ class ProtectionWatchdogTest {
         assertEquals(ProtectionFault.ACCESSIBILITY_DISABLED, decision.notifyOf)
     }
 
+    // --- The platform refusing the restart (issue #62) ----------------------------------------
+
+    /**
+     * `faultToReport` is the second half of the policy, and it exists because the first half
+     * cannot see this failure. Whether Android will allow the foreground-service restart is only
+     * knowable after the attempt, and `decide` runs before it - so a phone that refuses every
+     * restart produced a caught exception, a `w`-level log line, and nothing the user ever saw.
+     */
+    private fun reportFor(
+        snapshot: ProtectionSnapshot,
+        startRefused: Boolean = true
+    ): ProtectionFault? =
+        ProtectionWatchdog.faultToReport(snapshot, ProtectionWatchdog.decide(snapshot), startRefused)
+
+    /**
+     * `NudgeMonitorService.isRunning` is an in-process flag, so the FIRST check after ANY process
+     * start - a boot, an app update, the OS restarting us - reports the service dead and attempts
+     * a start. Alerting on that single sighting would fire on every one of those.
+     */
+    @Test
+    fun `a refused start on a first sighting stays silent`() {
+        assertNull(
+            "one confirming cycle, the same rule MONITOR_SERVICE_DEAD already has",
+            reportFor(snapshot(monitorServiceRunning = false, wasDegradedLastCheck = false))
+        )
+    }
+
+    /**
+     * The second consecutive refusal is the real thing: we asked, the platform said no, and we
+     * asked again a cycle later and it said no again. Nothing in the app can fix that, which is
+     * exactly why the user has to be told - the overlay permission is theirs to grant.
+     */
+    @Test
+    fun `a second consecutive refusal reports the blocked start`() {
+        assertEquals(
+            ProtectionFault.MONITOR_START_BLOCKED,
+            reportFor(snapshot(monitorServiceRunning = false, wasDegradedLastCheck = true))
+        )
+    }
+
+    /** Never nag a user who opted out - a refusal must not become a back door around that rule. */
+    @Test
+    fun `a refused start while monitoring is off says nothing`() {
+        assertNull(
+            reportFor(
+                snapshot(
+                    globalEnabled = false,
+                    monitorServiceRunning = false,
+                    wasDegradedLastCheck = true
+                )
+            )
+        )
+    }
+
+    /**
+     * Blocking being dead outranks having lost the process priority that protects it, and both
+     * accessibility recoveries bring the service back with them anyway. Reporting the refusal here
+     * would send a user whose blocking has actually stopped to fix the wrong permission.
+     */
+    @Test
+    fun `an accessibility fault outranks a refused start`() {
+        assertEquals(
+            ProtectionFault.ACCESSIBILITY_DISABLED,
+            reportFor(
+                snapshot(
+                    accessibilityGranted = false,
+                    monitorServiceRunning = false,
+                    wasDegradedLastCheck = true
+                )
+            )
+        )
+        assertEquals(
+            ProtectionFault.ACCESSIBILITY_CRASHED,
+            reportFor(
+                snapshot(
+                    accessibilityConnected = false,
+                    monitorServiceRunning = false,
+                    wasDegradedLastCheck = true
+                )
+            )
+        )
+    }
+
+    /**
+     * One cooldown clock, shared with every other fault. A phone in this state refuses every
+     * restart, so without it this would be an alert every 15 minutes for as long as the permission
+     * stays ungranted - and a notification the user learns to swipe away is worth less than none.
+     */
+    @Test
+    fun `a refused start inside the cooldown window stays quiet`() {
+        assertNull(
+            reportFor(
+                snapshot(
+                    monitorServiceRunning = false,
+                    wasDegradedLastCheck = true,
+                    lastNotifiedAtMs = now - ProtectionWatchdog.NOTIFICATION_COOLDOWN_MS + 1
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `the refused-start alert repeats once the cooldown has elapsed`() {
+        assertEquals(
+            ProtectionFault.MONITOR_START_BLOCKED,
+            reportFor(
+                snapshot(
+                    monitorServiceRunning = false,
+                    wasDegradedLastCheck = true,
+                    lastNotifiedAtMs = now - ProtectionWatchdog.NOTIFICATION_COOLDOWN_MS
+                )
+            )
+        )
+    }
+
+    /**
+     * **The counterfactual that makes every assertion above mean something.**
+     *
+     * This function sits on the path of every single check, not only the refused ones, so the
+     * no-refusal case has to be byte-identical to the behaviour that shipped before it existed.
+     * Remove the refusal wiring and the six tests above fail; get the pass-through wrong and this
+     * one fails, which is the half that would otherwise have gone unnoticed - a fix for a
+     * permission almost nobody lacks silently rewriting the alert everyone else gets.
+     */
+    @Test
+    fun `with nothing refused the reported fault is exactly the verdict, for every state`() {
+        val states = mapOf(
+            "healthy" to snapshot(),
+            "opted out" to snapshot(globalEnabled = false, monitorServiceRunning = false),
+            "accessibility disabled" to snapshot(accessibilityGranted = false),
+            "first sighting of a crash" to snapshot(accessibilityConnected = false),
+            "confirmed crash" to snapshot(
+                accessibilityConnected = false,
+                wasDegradedLastCheck = true
+            ),
+            "service newly dead" to snapshot(monitorServiceRunning = false),
+            "service still dead" to snapshot(
+                monitorServiceRunning = false,
+                wasDegradedLastCheck = true
+            ),
+            "inside the cooldown" to snapshot(
+                accessibilityGranted = false,
+                lastNotifiedAtMs = now - ProtectionWatchdog.NOTIFICATION_COOLDOWN_MS + 1
+            )
+        )
+
+        states.forEach { (name, snapshot) ->
+            val decision = ProtectionWatchdog.decide(snapshot)
+            assertEquals(
+                "$name: with startRefused = false the reported fault must be the verdict itself",
+                decision.notifyOf,
+                ProtectionWatchdog.faultToReport(snapshot, decision, startRefused = false)
+            )
+        }
+    }
+
     @Test
     fun `the cooldown is long enough to be a daily-ish cap, not a per-run one`() {
         assertTrue(
