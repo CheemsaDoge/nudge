@@ -1,5 +1,6 @@
 package com.astraedus.nudge.util
 
+import com.astraedus.nudge.LeakedCoroutineExceptions
 import com.astraedus.nudge.domain.logging.NudgeLog
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -56,11 +57,20 @@ class CrashSafeScopeTest {
         Thread.setDefaultUncaughtExceptionHandler { _, throwable -> uncaught = throwable }
     }
 
+    /**
+     * The counterfactual below leaves an unhandled throwable in `kotlinx-coroutines-test`'s
+     * process-global `ExceptionCollector`, where the next `runTest` ANYWHERE in this fork would
+     * pick it up as `UncaughtExceptionsBeforeTest` and fail an unrelated test
+     * ([#53](https://github.com/astraedus/nudge/issues/53)). Draining here rather than inside that
+     * one test means a case added to this class later cannot forget. See
+     * [LeakedCoroutineExceptions].
+     */
     @After
     fun restore() {
         Thread.setDefaultUncaughtExceptionHandler(previousDefaultHandler)
         dispatcher.close()
         executor.shutdownNow()
+        LeakedCoroutineExceptions.drain()
     }
 
     private fun scope(): CoroutineScope =
@@ -120,9 +130,18 @@ class CrashSafeScopeTest {
     /**
      * THE INCIDENT. A bare supervisor scope hands the throwable to the thread's default handler,
      * which is how one Room or binder failure took the accessibility service down with the process.
+     *
+     * This is also the one test in the repo that deliberately produces a PROCESS-GLOBAL side
+     * effect, so it is the one test that has to clean up after itself — see
+     * [LeakedCoroutineExceptions] and [restore].
      */
     @Test
     fun `a bare SupervisorJob scope still reaches the crash handler`() {
+        // Arms kotlinx's collector (its first runTest in a fork is what enables it) and clears
+        // anything already queued, so the assertion below measures OUR leak wherever this class
+        // happens to land in the run order.
+        LeakedCoroutineExceptions.drain()
+
         val bare = CoroutineScope(SupervisorJob() + dispatcher)
         runBlocking { bare.launch { throw IllegalStateException("the F7 incident") }.join() }
         drain()
@@ -134,6 +153,13 @@ class CrashSafeScopeTest {
             uncaught
         )
         assertTrue(log.errors.isEmpty())
+        assertTrue(
+            "the same throwable must also have landed in the process-global unhandled queue -- " +
+                "that is what made this the source of #53, and it is what the drain removes. If " +
+                "this ever reads false the drain has become a no-op and the next test in the " +
+                "fork is back to inheriting a failure it did not cause",
+            LeakedCoroutineExceptions.drain()
+        )
     }
 
     @Test
