@@ -6,6 +6,7 @@ import android.content.pm.ActivityInfo
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
+import com.astraedus.nudge.NudgeIdentity
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkConstructor
@@ -39,9 +40,16 @@ class InstalledAppsRepositoryTest {
         return info
     }
 
+    /**
+     * The REAL applicationId, never the namespace. `InstalledAppsRepository` filters on
+     * `context.packageName`, which at runtime is `dev.astraedus.nudge`; typing
+     * `com.astraedus.nudge` here made both sides of the filter agree on a value no device ever
+     * produces, which is the fixture dishonesty that hid issue #33 for months
+     * (`docs/testing-strategy.md` rule (b)).
+     */
     private fun newRepo(
         pm: PackageManager,
-        ownPackage: String = "com.astraedus.nudge"
+        ownPackage: String = NudgeIdentity.APPLICATION_ID
     ): InstalledAppsRepository {
         val context = mockk<Context>(relaxed = true)
         every { context.packageManager } returns pm
@@ -92,7 +100,7 @@ class InstalledAppsRepositoryTest {
         every { pm.queryIntentActivities(any<Intent>(), any<Int>()) } returns listOf(
             resolveInfo("com.example.zebra", "Zebra"),
             resolveInfo("com.example.apple", "Apple"),
-            resolveInfo("com.astraedus.nudge", "Nudge"),        // own package -> filtered
+            resolveInfo(NudgeIdentity.APPLICATION_ID, "Nudge"), // own package -> filtered
             resolveInfo("com.android.settings", "Settings")     // excluded -> filtered
         )
         every { pm.getApplicationIcon(any<String>()) } returns mockk(relaxed = true)
