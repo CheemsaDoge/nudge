@@ -1,1 +1,3 @@
 • A hold or delay you had already done could be demanded again minutes later while you were still sitting in the app. Scrolling, reading and typing now count as proof you never left. Leaving properly still costs a fresh wait.
+• Nudge no longer re-posts its ongoing notification over and over, so it stops waking your phone all night. On Android 14+ it stays gone if you swipe it.
+• When Android blocks Nudge from restarting its protection, Nudge now tells you instead of failing silently.
