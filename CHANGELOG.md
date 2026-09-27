@@ -4,6 +4,8 @@ All notable changes to Nudge are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [1.18.3] - 2026-09-27
+
 ### Changed
 - Release notes on Google Play, IzzyOnDroid and F-Droid now come from per-version store notes
   written by hand (`fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`) rather than

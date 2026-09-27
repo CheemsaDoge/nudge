@@ -1,3 +1,6 @@
-• A hold or delay you had already done could be demanded again minutes later while you were still sitting in the app. Scrolling, reading and typing now count as proof you never left. Leaving properly still costs a fresh wait.
-• Nudge no longer re-posts its ongoing notification over and over, so it stops waking your phone all night. On Android 14+ it stays gone if you swipe it.
-• When Android blocks Nudge from restarting its protection, Nudge now tells you instead of failing silently.
+• A finished delay or hold could be demanded again minutes later while still in the app. Fixed.
+• The notification was re-posted every 30 seconds, waking your phone all night. Now it posts only when its text changes.
+• If Android stops Nudge restarting itself, you are now told.
+• Home then reopening a blocked app sometimes skipped the block. Fixed.
+• A raised daily limit no longer shows the old limit screen.
+• Instagram's Following steer no longer re-fires after a screen timeout.
