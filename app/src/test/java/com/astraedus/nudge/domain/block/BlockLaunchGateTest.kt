@@ -206,6 +206,250 @@ class BlockLaunchGateTest {
         )
     }
 
+    // --- the pending overlay's DECISION, not just its package (issue #50) -----------------------
+
+    private val dailyLimit = BlockLaunchGate.decisionFingerprint(
+        attributedPackage = blocked,
+        blockMode = "HARD_BLOCK",
+        dailyLimited = true
+    )
+    private val plainDelay =
+        BlockLaunchGate.decisionFingerprint(attributedPackage = blocked, blockMode = "DELAY")
+
+    /**
+     * THE #50 CASE. The reporter raised a daily limit and cold-launched the app; logcat shows the
+     * fresh evaluation computing a DELAY with 17 minutes left, and the launch that would have
+     * shown it refused as a duplicate of the "Daily limit reached" screen that no longer applied.
+     */
+    @Test
+    fun `a pending overlay for a DIFFERENT block does not make this launch a duplicate`() {
+        assertEquals(
+            Decision.LAUNCH,
+            BlockLaunchGate.decide(
+                blocked, blocked, null, nowMs = 1_100,
+                pendingOverlay = pending().copy(decisionKey = dailyLimit),
+                decisionKey = plainDelay
+            )
+        )
+    }
+
+    /**
+     * ...and the counterfactual, which is the pre-fix rule verbatim: with no claim about WHICH
+     * block this is, the gate falls back to "same package, therefore the same thing" and refuses
+     * exactly as it did when issue #50 was reported.
+     */
+    @Test
+    fun `counterfactual - with no decision claim the stale overlay still swallows the launch`() {
+        assertEquals(
+            Decision.DROP_ALREADY_PENDING,
+            BlockLaunchGate.decide(
+                blocked, blocked, null, nowMs = 1_100,
+                pendingOverlay = pending().copy(decisionKey = dailyLimit),
+                decisionKey = null
+            )
+        )
+    }
+
+    /**
+     * The other direction, and it is what stops this reopening issue #36: the SAME block launched
+     * twice inside the settle window is still one block, and the second launch is still refused.
+     */
+    @Test
+    fun `the same block launched twice inside the settle window is still a duplicate`() {
+        assertEquals(
+            Decision.DROP_ALREADY_PENDING,
+            BlockLaunchGate.decide(
+                blocked, blocked, null, nowMs = 1_100,
+                pendingOverlay = pending().copy(decisionKey = plainDelay),
+                decisionKey = plainDelay
+            )
+        )
+    }
+
+    /**
+     * A fingerprint over a MOVING number would be no fingerprint at all: the auto-kick cooldown's
+     * remaining seconds and a daily limit's remaining milliseconds both tick every time they are
+     * read, so including either would make every re-launch inside the settle window look new and
+     * hand back the duplicate launches issue #36 measured.
+     */
+    @Test
+    fun `the fingerprint is stable across everything that ticks`() {
+        assertEquals(
+            "two reads of the same block a second apart must fingerprint identically",
+            BlockLaunchGate.decisionFingerprint(blocked, "DELAY"),
+            BlockLaunchGate.decisionFingerprint(blocked, "DELAY")
+        )
+        assertTrue(
+            "and the identity of the confrontation is reused rather than re-spelled",
+            plainDelay.startsWith(BlockLaunchGate.confrontationKey(blocked))
+        )
+    }
+
+    /** What the fingerprint must be able to tell apart, each for a reason a user would see. */
+    @Test
+    fun `the fingerprint separates mode, daily-limit copy, feature and site`() {
+        val distinct = listOf(
+            BlockLaunchGate.decisionFingerprint(blocked, "DELAY"),
+            BlockLaunchGate.decisionFingerprint(blocked, "HARD_BLOCK"),
+            BlockLaunchGate.decisionFingerprint(blocked, "HARD_BLOCK", dailyLimited = true),
+            BlockLaunchGate.decisionFingerprint(blocked, "DELAY", featureKey = "reels"),
+            BlockLaunchGate.decisionFingerprint(other, "DELAY", webDomain = "instagram.com"),
+            BlockLaunchGate.decisionFingerprint(other, "DELAY", webDomain = "youtube.com")
+        )
+        assertEquals(
+            "each of these is a different screen, so none may collapse onto another",
+            distinct.size,
+            distinct.toSet().size
+        )
+    }
+
+    /**
+     * A re-delivery through `onNewIntent` keeps the on-screen overlay where it is (issue #36) but
+     * must adopt the NEW block's fingerprint: the activity is about to render that block, so a
+     * record still describing the previous one would call the next identical launch fresh and the
+     * next genuinely-different one a duplicate -- issue #50 inverted.
+     */
+    @Test
+    fun `a re-delivery to an on-screen overlay adopts the new decision`() {
+        val onScreen = BlockLaunchGate.PendingOverlay(
+            blocked, launchedAtMs = 1_000, windowShown = true, id = 7L, decisionKey = dailyLimit
+        )
+        val after = BlockLaunchGate.pendingOverlayAfterLaunch(
+            pending = onScreen, target = blocked, nowMs = 4_000, id = 9L, decisionKey = plainDelay
+        )
+        assertEquals("the overlay is still the one on screen", 7L, after.id)
+        assertTrue("and still on screen", after.windowShown)
+        assertEquals("but it is showing the NEW block now", plainDelay, after.decisionKey)
+    }
+
+    // --- the block we raced ourselves out of (issue #58, mechanism 2) ---------------------------
+
+    @Test
+    fun `a launch dropped because the foreground moved is remembered`() {
+        assertEquals(
+            BlockLaunchGate.DeferredLaunch(blocked, 1_000),
+            BlockLaunchGate.deferredLaunchAfterDecision(
+                null, Decision.DROP_FOREGROUND_MOVED, blocked, nowMs = 1_000
+            )
+        )
+    }
+
+    /**
+     * The other three verdicts owe nothing. A walk-away drop is the user having just DECLINED this
+     * block (#26) and re-arming after it would undo the fix; an already-pending drop means the
+     * overlay is on its way; and a launch settles the debt outright.
+     */
+    @Test
+    fun `the deliberate verdicts clear the deferral instead of creating one`() {
+        val deferred = BlockLaunchGate.DeferredLaunch(blocked, 1_000)
+        listOf(
+            Decision.LAUNCH,
+            Decision.DROP_WALK_AWAY_IN_FLIGHT,
+            Decision.DROP_ALREADY_PENDING
+        ).forEach { decision ->
+            assertNull(
+                "$decision must not leave a block owed",
+                BlockLaunchGate.deferredLaunchAfterDecision(deferred, decision, blocked, 1_200)
+            )
+        }
+    }
+
+    @Test
+    fun `a verdict for another app leaves this app's deferral alone`() {
+        val deferred = BlockLaunchGate.DeferredLaunch(blocked, 1_000)
+        assertSame(
+            deferred,
+            BlockLaunchGate.deferredLaunchAfterDecision(deferred, Decision.LAUNCH, other, 1_200)
+        )
+    }
+
+    @Test
+    fun `the target settling in front redeems the deferral`() {
+        assertTrue(
+            BlockLaunchGate.isDeferredLaunchRedeemed(
+                deferred = BlockLaunchGate.DeferredLaunch(blocked, 1_000),
+                eventType = A11yEventType.WINDOW_STATE_CHANGED,
+                signal = ForegroundSignal.AppWindow(blocked),
+                nowMs = 1_200
+            )
+        )
+    }
+
+    /**
+     * `WINDOW_STATE_CHANGED` and nothing else, for the same reason [BlockLaunchGate.isGenuineBypass]
+     * insists on it: only that type means a new activity is in front. A content change from the
+     * target comes from a window that is already there and proves nothing about the race.
+     */
+    @Test
+    fun `a content change from the target is not the settle`() {
+        assertFalse(
+            BlockLaunchGate.isDeferredLaunchRedeemed(
+                deferred = BlockLaunchGate.DeferredLaunch(blocked, 1_000),
+                eventType = A11yEventType.WINDOW_CONTENT_CHANGED,
+                signal = ForegroundSignal.AppWindow(blocked),
+                nowMs = 1_200
+            )
+        )
+    }
+
+    @Test
+    fun `another app settling does not redeem this deferral`() {
+        assertFalse(
+            BlockLaunchGate.isDeferredLaunchRedeemed(
+                deferred = BlockLaunchGate.DeferredLaunch(blocked, 1_000),
+                eventType = A11yEventType.WINDOW_STATE_CHANGED,
+                signal = ForegroundSignal.AppWindow(other),
+                nowMs = 1_200
+            )
+        )
+    }
+
+    @Test
+    fun `a deferral past its time to live is never redeemed`() {
+        assertFalse(
+            "re-blocking an app minutes after the drop is the failure a user would see",
+            BlockLaunchGate.isDeferredLaunchRedeemed(
+                deferred = BlockLaunchGate.DeferredLaunch(blocked, 1_000),
+                eventType = A11yEventType.WINDOW_STATE_CHANGED,
+                signal = ForegroundSignal.AppWindow(blocked),
+                nowMs = 1_000 + BlockLaunchGate.DEFERRED_LAUNCH_TTL_MS
+            )
+        )
+    }
+
+    /**
+     * The deferral's departure rule is the same as the arrival's and the storm's, for the third
+     * time: only a signal that proves the user is somewhere else may end it. A sub-flow must not,
+     * or the very race this exists for would cancel its own deferral.
+     */
+    @Test
+    fun `the deferral survives a sub-flow and dies on a real departure`() {
+        val deferred = BlockLaunchGate.DeferredLaunch(blocked, 1_000)
+        listOf(
+            ForegroundSignal.OwnUi(nudge),
+            ForegroundSignal.AwarenessOverlay(nudge),
+            ForegroundSignal.SystemSurface("com.android.systemui"),
+            ForegroundSignal.Transient("com.google.android.inputmethod.latin"),
+            ForegroundSignal.PipOnly("com.google.android.youtube"),
+            ForegroundSignal.NotForeground(blocked),
+            ForegroundSignal.AppWindow(blocked)
+        ).forEach { signal ->
+            assertSame(
+                "$signal is not the user leaving $blocked",
+                deferred,
+                BlockLaunchGate.deferredLaunchAfterSignal(signal, deferred)
+            )
+        }
+        assertNull(
+            "going home means no block is owed on the way in any more",
+            BlockLaunchGate.deferredLaunchAfterSignal(ForegroundSignal.Home(launcher), deferred)
+        )
+        assertNull(
+            "and so does another app genuinely coming forward",
+            BlockLaunchGate.deferredLaunchAfterSignal(ForegroundSignal.AppWindow(other), deferred)
+        )
+    }
+
     // --- isGenuineBypass ------------------------------------------------------------------------
 
     private fun bypass(

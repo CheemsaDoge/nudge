@@ -606,7 +606,16 @@ class InterventionCountReplayTest {
         assertEquals(
             "a re-delivery through onNewIntent leaves the overlay exactly where it is: on screen",
             onScreen,
-            kept
+            // Everything about WHICH overlay this is must survive; what legitimately changes is
+            // WHICH BLOCK it is showing, because the new intent is about to render that block
+            // (issue #50). Compared with the new fingerprint erased rather than field by field, so
+            // a future field added to PendingOverlay is caught here instead of silently ignored.
+            kept.copy(decisionKey = onScreen.decisionKey)
+        )
+        assertEquals(
+            "and the record now describes the block that was just delivered into it",
+            delayKey(blocked),
+            kept.decisionKey
         )
     }
 

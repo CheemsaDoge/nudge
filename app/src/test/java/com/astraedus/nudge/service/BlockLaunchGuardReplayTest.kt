@@ -4,6 +4,7 @@ import com.astraedus.nudge.domain.block.BlockLaunchGate
 import com.astraedus.nudge.domain.block.delayKey
 import com.astraedus.nudge.domain.events.A11yCapture
 import com.astraedus.nudge.domain.events.A11yEventType
+import com.astraedus.nudge.domain.events.AccessibilityEventCodec
 import com.astraedus.nudge.domain.events.AccessibilityEventRecord
 import com.astraedus.nudge.domain.events.EventClassifier
 import com.astraedus.nudge.domain.events.ForegroundSignal
@@ -11,7 +12,9 @@ import com.astraedus.nudge.domain.sitting.SittingEndCause
 import com.astraedus.nudge.domain.sitting.SittingEvent
 import com.astraedus.nudge.domain.sitting.SittingTracker
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -31,7 +34,7 @@ import org.junit.Test
  * v1.16.0 and already carrying the defect. Nothing was captured for it; the timings were there all
  * along and nobody had looked at them in this light.
  *
- * The #26 and #31 sequences are SYNTHESISED, and deliberately NOT committed to that directory:
+ * The #26, #31 and #58 sequences are SYNTHESISED, and deliberately NOT committed to that directory:
  * it holds real device streams, and a hand-written file sitting among them would be read as device
  * evidence by the next person. What makes them honest instead of hopeful is the COUNTERFACTUAL on
  * each one, the assertion that the pre-fix rule really does launch on this exact sequence. A
@@ -67,25 +70,33 @@ class BlockLaunchGuardReplayTest {
      * service feeds. Written as one function precisely because that is the invariant: a test that
      * updated the guard without the sitting could not see them drift.
      */
-    private fun event(type: A11yEventType, packageName: String, className: String? = null) {
+    private fun event(
+        type: A11yEventType,
+        packageName: String,
+        className: String? = null
+    ): ForegroundSignal {
         val record = AccessibilityEventRecord(
             type = type,
             packageName = packageName,
             className = className,
             eventTimeMs = clock
         )
-        val signal = classifier.classify(
-            record = record,
-            currentImePackage = ime,
-            launcherPackages = setOf(launcher),
-            pipOnlyPackages = emptySet()
-        )
+        return apply(classify(record))
+    }
+
+    /**
+     * Feed ONE signal to the same two consumers of the same single classification the service
+     * feeds. Written as one function precisely because that is the invariant: a test that updated
+     * the guard without the sitting could not see them drift.
+     */
+    private fun apply(signal: ForegroundSignal): ForegroundSignal {
         guard.onForegroundSignal(signal)
         when (val moved = sitting.onSignal(signal, clock)) {
             is SittingEvent.Ended -> sittingEnds += moved.cause
             is SittingEvent.Started -> moved.ended?.let { sittingEnds += it.cause }
             SittingEvent.Unchanged -> Unit
         }
+        return signal
     }
 
     private fun classify(record: AccessibilityEventRecord) = classifier.classify(
@@ -667,5 +678,341 @@ class BlockLaunchGuardReplayTest {
         guard.reset()
         assertNull(guard.foregroundPackage)
         assertEquals(BlockLaunchGate.Decision.LAUNCH, guard.decide(blocked, delayKey(blocked)))
+    }
+
+    // --- issue #58, mechanism 1: the launcher arrives ONLY as a content change ------------------
+
+    /**
+     * THE EVENT FROM THE REPORT, decoded by the PRODUCTION codec rather than hand-built.
+     *
+     * `docs/testing-strategy.md` rule (b): a fixture that re-spells an identity constant is a
+     * second definition of it. This is the `EV` line quoted in
+     * [#58](https://github.com/astraedus/nudge/issues/58) verbatim, closed at the truncation the
+     * issue text shows (`AccessibilityEventCodec` takes the record's defaults for missing keys, so
+     * the two fields the report actually carries are the two fields this event has).
+     *
+     * It is NOT committed under `app/src/test/resources/a11y-captures/`, deliberately, and for the
+     * reason this file's class doc already gives for the #26 and #31 sequences: that directory
+     * holds whole device streams and a hand-assembled file sitting among them would be read as
+     * device evidence by the next person. What makes these honest is the COUNTERFACTUAL on each.
+     */
+    private val launcherContentChangeFromTheReport: AccessibilityEventRecord =
+        requireNotNull(
+            AccessibilityEventCodec.decode(
+                """{"t":"WINDOW_CONTENT_CHANGED","p":"com.google.android.apps.nexuslauncher"}"""
+            )
+        ) { "the EV line quoted in issue #58 must decode through the production codec" }
+
+    /** The service's issue #7 fallback: classify, then promote only once it is VERIFIED. */
+    private fun verifiedContentChange(
+        record: AccessibilityEventRecord,
+        launcherPackages: Set<String> = setOf(launcher)
+    ): ForegroundSignal = apply(
+        classifier.classifyVerifiedContentChangeAsSwitch(
+            record = record,
+            currentImePackage = ime,
+            launcherPackages = launcherPackages,
+            pipOnlyPackages = emptySet()
+        )
+    )
+
+    @Test
+    fun `the report's launcher event is the launcher, and it is a content change`() {
+        assertEquals(launcher, launcherContentChangeFromTheReport.packageName)
+        assertEquals(
+            A11yEventType.WINDOW_CONTENT_CHANGED,
+            launcherContentChangeFromTheReport.type
+        )
+        assertEquals(
+            "unpromoted it claims nothing -- which is why the sitting never ended",
+            ForegroundSignal.NotForeground(launcher),
+            classify(launcherContentChangeFromTheReport)
+        )
+    }
+
+    /**
+     * The failing trial, replayed. The user completes a delay, uses the app, presses Home -- and
+     * the launcher arrives ONLY as a content change, with no `WINDOW_STATE_CHANGED` anywhere in
+     * the buffer. Verified against the real active window it IS the home screen, so the sitting
+     * ends the way the passing trials' `sitting ended ... cause=WENT_HOME` line says it should.
+     */
+    @Test
+    fun `a verified launcher content change ends the sitting as WENT_HOME`() {
+        window(blocked)
+        tick(5_000)
+
+        verifiedContentChange(launcherContentChangeFromTheReport)
+
+        assertEquals(listOf(SittingEndCause.WENT_HOME), sittingEnds)
+        assertEquals(launcher, guard.foregroundPackage)
+    }
+
+    /**
+     * THE COUNTERFACTUAL, and it is the pre-fix code exactly: the promotion function had no
+     * launcher set at all, and the stock launchers are in `SYSTEM_PACKAGES`, so the same verified
+     * event came back as a [ForegroundSignal.SystemSurface] -- which the sitting model is
+     * structurally incapable of acting on, and which the service dropped before it ever read the
+     * active window.
+     *
+     * That is the reported bug: nothing ended, so the completed delay was still granted, and the
+     * reopen three seconds later walked straight in.
+     */
+    @Test
+    fun `counterfactual - without the launcher set the same event changes nothing`() {
+        assertTrue(
+            "this counterfactual is only honest while the stock launcher IS a system package",
+            launcher in NudgeAccessibilityService.SYSTEM_PACKAGES
+        )
+
+        window(blocked)
+        tick(5_000)
+
+        val signal = verifiedContentChange(
+            launcherContentChangeFromTheReport,
+            launcherPackages = emptySet()
+        )
+
+        assertEquals(ForegroundSignal.SystemSurface(launcher), signal)
+        assertEquals("nothing ended -- this is the miss", emptyList<SittingEndCause>(), sittingEnds)
+        assertEquals(
+            "and the guard still believes the user is in the blocked app",
+            blocked,
+            guard.foregroundPackage
+        )
+
+        tick(3_000)
+        window(blocked)
+        assertEquals(
+            "so the reopen three seconds later is still the SAME sitting, and the grant survives",
+            emptyList<SittingEndCause>(),
+            sittingEnds
+        )
+    }
+
+    /**
+     * The guard rail on the promotion, and the reason it is allowed at all. Launcher widgets tick
+     * while the user is inside a fullscreen app; those content changes cannot reach the promotion,
+     * because the APP owns the active window. Modelled here as the service models it: the
+     * verification is the caller's, and an unverified event never gets promoted.
+     */
+    @Test
+    fun `launcher churn behind a live app never reaches the promotion`() {
+        window(blocked)
+        tick(5_000)
+
+        // The service's own check: `activeWindowPackageOrNull() != packageName` -> return.
+        val activeWindowPackage = blocked
+        if (activeWindowPackage == launcherContentChangeFromTheReport.packageName) {
+            verifiedContentChange(launcherContentChangeFromTheReport)
+        }
+
+        assertEquals(
+            "a widget redraw must not revoke a delay somebody earned (#5, #28)",
+            emptyList<SittingEndCause>(),
+            sittingEnds
+        )
+    }
+
+    // --- issue #58, mechanism 2: the block we raced ourselves out of ----------------------------
+
+    /**
+     * The service's same-package debounce, modelled: `evaluateForegroundPackage` early-returns for
+     * `packageName == lastPackage && now - lastEvalTime < DEBOUNCE_MS`.
+     *
+     * It is here because it is the whole reason a `DROP_FOREGROUND_MOVED` is SILENT rather than
+     * self-correcting. The dropped evaluation already set `lastPackage` to the target, so the
+     * settle that follows finds nothing to do and the block is simply gone.
+     */
+    private class EvaluationDebounce(private val debounceMs: Long = 1_000L) {
+        private var lastPackage: String? = null
+        private var lastEvalTime = 0L
+
+        fun evaluate(packageName: String, nowMs: Long): Boolean {
+            if (packageName == lastPackage && nowMs - lastEvalTime < debounceMs) return false
+            lastPackage = packageName
+            lastEvalTime = nowMs
+            return true
+        }
+
+        /** What the redemption does: `lastEvalTime = 0L`, so the question may be asked again. */
+        fun spend() {
+            lastEvalTime = 0L
+        }
+    }
+
+    /**
+     * The second failing trial from the report, replayed. `WENT_HOME` is logged correctly, so the
+     * grant really is revoked; the user reopens the app; the evaluation runs on the IO scope while
+     * the launcher is still the last thing the main thread saw, and the decision comes back to
+     * `block overlay launch dropped ... reason=DROP_FOREGROUND_MOVED`. Nothing re-evaluated on the
+     * return, and the app opened free.
+     */
+    @Test
+    fun `a block dropped because we raced ourselves is finished when the target settles`() {
+        val debounce = EvaluationDebounce()
+
+        window(blocked)
+        tick(3_000)
+        window(launcher)
+        assertEquals(listOf(SittingEndCause.WENT_HOME), sittingEnds)
+
+        // The reopen. Evaluation starts and spends the debounce...
+        tick(2_000)
+        assertTrue(debounce.evaluate(blocked, clock))
+
+        // ...and the decision lands while the launcher is still what we last observed.
+        val dropped = guard.decide(blocked, delayKey(blocked))
+        assertEquals(BlockLaunchGate.Decision.DROP_FOREGROUND_MOVED, dropped)
+        guard.onLaunchAttempt(blocked, dropped)
+
+        // The app's own window settles a moment later. THE ORDER IS THE FIX: redeem, which spends
+        // the debounce, and only then evaluate.
+        tick(120)
+        val settled = window(blocked)
+        assertTrue(
+            "the settle is what the race was about, so it is what redeems the drop",
+            guard.redeemDeferredLaunch(A11yEventType.WINDOW_STATE_CHANGED, settled)
+        )
+        debounce.spend()
+        assertTrue("and the question is asked again", debounce.evaluate(blocked, clock))
+        assertEquals(
+            "with the app genuinely in front, the block this time is shown",
+            BlockLaunchGate.Decision.LAUNCH,
+            guard.decide(blocked, delayKey(blocked))
+        )
+    }
+
+    /**
+     * RULE (d)'s REVERSED-ORDER COUNTERFACTUAL. The fix is "redeem before evaluating"; evaluating
+     * first and redeeming after is the pre-fix behaviour wearing the new code, and it must still
+     * fail. The redemption is spent on a debounce that has already turned the settle away.
+     */
+    @Test
+    fun `counterfactual - redeeming AFTER the evaluation leaves the block swallowed`() {
+        val debounce = EvaluationDebounce()
+
+        window(blocked)
+        tick(3_000)
+        window(launcher)
+        tick(2_000)
+        assertTrue(debounce.evaluate(blocked, clock))
+        val dropped = guard.decide(blocked, delayKey(blocked))
+        assertEquals(BlockLaunchGate.Decision.DROP_FOREGROUND_MOVED, dropped)
+        guard.onLaunchAttempt(blocked, dropped)
+
+        tick(120)
+        val settled = window(blocked)
+        assertFalse(
+            "reversed: the settle is evaluated first, and the debounce turns it away",
+            debounce.evaluate(blocked, clock)
+        )
+        assertTrue(guard.redeemDeferredLaunch(A11yEventType.WINDOW_STATE_CHANGED, settled))
+        debounce.spend()
+        // Nothing asks again: the dispatch for this event is over. This is the silent miss.
+    }
+
+    /**
+     * ...and the counterfactual for the deferral itself: without one, the settle redeems nothing,
+     * so there is nothing to spend the debounce and the block stays swallowed. Run on a guard that
+     * was never told about the drop, which is the pre-fix guard exactly.
+     */
+    @Test
+    fun `counterfactual - with no deferral the settle redeems nothing`() {
+        window(blocked)
+        tick(3_000)
+        window(launcher)
+        tick(2_000)
+
+        // The pre-fix code dropped the launch and recorded nothing but a log line.
+        assertEquals(BlockLaunchGate.Decision.DROP_FOREGROUND_MOVED, guard.decide(blocked, delayKey(blocked)))
+
+        tick(120)
+        val settled = window(blocked)
+        assertFalse(
+            "nothing remembers the block, so nothing finishes it",
+            guard.redeemDeferredLaunch(A11yEventType.WINDOW_STATE_CHANGED, settled)
+        )
+    }
+
+    /** One drop buys ONE re-evaluation: the deferral is consumed, not a standing licence. */
+    @Test
+    fun `a redeemed deferral is spent`() {
+        window(blocked)
+        window(launcher)
+        val dropped = guard.decide(blocked, delayKey(blocked))
+        guard.onLaunchAttempt(blocked, dropped)
+
+        val settled = window(blocked)
+        assertTrue(guard.redeemDeferredLaunch(A11yEventType.WINDOW_STATE_CHANGED, settled))
+        tick(50)
+        val again = window(blocked)
+        assertFalse(
+            "the second window event of the same arrival owes nothing",
+            guard.redeemDeferredLaunch(A11yEventType.WINDOW_STATE_CHANGED, again)
+        )
+    }
+
+    /**
+     * The user genuinely moving on costs nothing. A drop, then Home, then a return much later is
+     * an ordinary fresh arrival that the ordinary path evaluates -- the deferral must not be
+     * sitting there waiting to fire a block nobody asked for.
+     */
+    @Test
+    fun `going home cancels a deferred block`() {
+        window(blocked)
+        window(nudge, BlockLaunchGate.MAIN_APP_ACTIVITY_CLASS)
+        val dropped = guard.decide(blocked, delayKey(blocked))
+        guard.onLaunchAttempt(blocked, dropped)
+
+        window(launcher)
+        tick(200)
+        val settled = window(blocked)
+        assertFalse(
+            "a trip home ends what was owed on the way in",
+            guard.redeemDeferredLaunch(A11yEventType.WINDOW_STATE_CHANGED, settled)
+        )
+    }
+
+    /**
+     * A screen-off departure reaches the guard as a broadcast and never as a signal (#54), so it
+     * has its own route -- and it must cancel the deferral by that route too, or the two ways of
+     * leaving an app would disagree.
+     */
+    @Test
+    fun `a departure the stream cannot describe cancels a deferred block`() {
+        window(blocked)
+        window(nudge, BlockLaunchGate.MAIN_APP_ACTIVITY_CLASS)
+        val dropped = guard.decide(blocked, delayKey(blocked))
+        guard.onLaunchAttempt(blocked, dropped)
+
+        guard.onDeparture("screen_off")
+
+        val settled = window(blocked)
+        assertFalse(
+            guard.redeemDeferredLaunch(A11yEventType.WINDOW_STATE_CHANGED, settled)
+        )
+    }
+
+    /**
+     * ISSUE #36 IS UNTOUCHED BY ALL OF THIS. The deferral decides whether an overlay is SHOWN; the
+     * arrival decides whether a ROW is written, and they are different questions. A redeemed
+     * deferral inside one arrival must not buy a second row.
+     */
+    @Test
+    fun `a redeemed deferral does not buy a second row for one arrival`() {
+        val key = BlockLaunchGate.confrontationKey(blocked)
+        window(blocked)
+        assertTrue("the first confrontation owes a row", guard.claimConfrontation(blocked, key))
+
+        window(nudge, "com.astraedus.nudge.ui.overlay.BlockOverlayActivity")
+        val dropped = guard.decide(blocked, delayKey(blocked))
+        guard.onLaunchAttempt(blocked, dropped)
+
+        val settled = window(blocked)
+        assertTrue(guard.redeemDeferredLaunch(A11yEventType.WINDOW_STATE_CHANGED, settled))
+        assertFalse(
+            "the user never left, so this is the same confrontation and owes no second row",
+            guard.claimConfrontation(blocked, key)
+        )
     }
 }

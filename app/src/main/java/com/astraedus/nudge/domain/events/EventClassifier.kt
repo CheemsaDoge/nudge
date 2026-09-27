@@ -104,6 +104,15 @@ class EventClassifier(
      * active window, which is what keeps this from being the blanket "a launcher event means home"
      * that [classify] forbids.
      *
+     * **The launcher is asked about BEFORE [systemPackages], and that order is load-bearing.** The
+     * stock launchers are IN that set (`com.android.launcher3`,
+     * `com.google.android.apps.nexuslauncher`, `com.samsung.android.launcher`), which is precisely
+     * what the pre-fix behaviour was: a launcher content change came back a
+     * [ForegroundSignal.SystemSurface], the caller dropped it before it ever read the active
+     * window, and the sitting was never told. Asked in the other order this fix would be dead code
+     * on every Pixel — one membership test answering two questions, the grouped-constant trap
+     * `docs/architecture/foreground-detection.md` records three earlier sprints of.
+     *
      * @param launcherPackages the home-screen packages, resolved from PackageManager. Empty means
      *   "we could not tell", and then nothing here is Home either — the same fail direction
      *   [classify] documents, because a false revoke re-blocks a user who never went anywhere.

@@ -416,13 +416,39 @@ class EventClassifierTest {
     /**
      * The same fail direction [classify] documents: an unresolvable launcher set means "we cannot
      * tell", and nothing is Home. A false revoke re-blocks a user who never went anywhere.
+     *
+     * What it falls back to is [ForegroundSignal.SystemSurface], and that is the PRE-FIX behaviour
+     * exactly: the stock launchers are in `SYSTEM_PACKAGES`, so before issue #58 a launcher content
+     * change came back as a system surface, the service's `signal !is AppWindow` check dropped it,
+     * and nothing at all happened to the sitting. One membership test answering two questions,
+     * which is the grouped-constant trap `docs/architecture/foreground-detection.md` records three
+     * separate sprints of -- and a fourth here.
      */
     @Test
     fun `with no launcher packages known a verified launcher content change is not Home`() {
         val record = event(launcher, A11yEventType.WINDOW_CONTENT_CHANGED)
         assertEquals(
-            ForegroundSignal.AppWindow(launcher),
+            ForegroundSignal.SystemSurface(launcher),
             classifier.classifyVerifiedContentChangeAsSwitch(record, futo, emptySet(), emptySet())
+        )
+    }
+
+    /**
+     * ...and the ORDER that makes the fix reachable at all: the launcher question is asked ahead of
+     * the system-package question. Asked after it, the stock launchers would never get past
+     * `SYSTEM_PACKAGES` and the fix would be dead code on every Pixel.
+     */
+    @Test
+    fun `the launcher outranks its own SYSTEM_PACKAGES membership`() {
+        assertTrue(
+            "this test is only meaningful while the stock launcher IS a system package",
+            launcher in systemPackages
+        )
+        assertEquals(
+            ForegroundSignal.Home(launcher),
+            classifier.classifyVerifiedContentChangeAsSwitch(
+                event(launcher, A11yEventType.WINDOW_CONTENT_CHANGED), futo, launcherSet, emptySet()
+            )
         )
     }
 

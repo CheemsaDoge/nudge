@@ -138,16 +138,26 @@ class ContentChangeAppSwitchTest {
         )
     }
 
-    /** No resolvable launcher set means "we cannot tell", and nothing is Home. */
+    /**
+     * THE PRE-FIX BEHAVIOUR, and it is what a missing launcher set still falls back to: the stock
+     * launchers are in `SYSTEM_PACKAGES`, so the promotion answered "system surface", the service
+     * dropped the event before the binder read, and the sitting was never told the user had gone
+     * home. That is issue #58's mechanism 1 verbatim.
+     */
     @Test
-    fun `with no launcher packages known the launcher is an ordinary app switch`() {
+    fun `with no launcher packages known the launcher is dropped, exactly as before the fix`() {
         assertTrue(
+            "this test is only meaningful while the stock launcher IS a system package",
+            launcher in NudgeAccessibilityService.SYSTEM_PACKAGES
+        )
+        assertEquals(
+            null,
             promotedSignal(
                 packageName = launcher,
                 lastPackage = keep,
                 activeWindowPackage = launcher,
                 launcherPackages = emptySet()
-            ) is ForegroundSignal.AppWindow
+            )
         )
     }
 
