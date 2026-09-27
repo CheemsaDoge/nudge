@@ -84,7 +84,13 @@ gplay status --package dev.astraedus.nudge --pretty   # verify
 ```
 Submit ONLY the release being promoted — the superseded one drops off the track automatically.
 
-The script pulls the CI-built AAB from the GitHub Release (or `SOURCE=run` for a `workflow_dispatch` artifact), runs `gplay preflight` (offline secret/compliance scan), then `gplay release` to the chosen track with release notes auto-extracted from `CHANGELOG.md`.
+The script pulls the CI-built AAB from the GitHub Release (or `SOURCE=run` for a `workflow_dispatch` artifact), runs `gplay preflight` (offline secret/compliance scan), then `gplay release` to the chosen track with the store notes below.
+
+### Store release notes (user-facing) — write them before tagging
+
+**`CHANGELOG.md` is the DEV-facing record. The store notes are a separate artefact**, written by hand at `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt` — the fastlane path IzzyOnDroid and F-Droid already read, so one file serves all three stores. Plain text, ≤ 500 bytes, one item per line starting with `• `: what was fixed and what the user will notice. No markdown, no issue numbers, no URLs, no "What's new" header (Play adds its own). Derived notes are how v1.18.1 shipped LIVE with a raw `[#54](https://…)` in it.
+
+`publish-to-play.sh` resolves the versionCode from the tag, uses that file **verbatim** after validating it, and only falls back to CHANGELOG extraction — loudly — if the file is missing. Preview before shipping: `NOTES_ONLY=1 scripts/publish-to-play.sh X.Y.Z` (touches nothing). `scripts/check-store-notes.sh` is the same validator and runs in CI on every tag **and** every push to main, so a bumped versionCode with no notes fails the build before the tag is cut.
 
 **Why local, not CI (open-source security):** the repo is PUBLIC, so we never put the Google Play API credential in GitHub Actions — a malicious PR or compromised action could exfiltrate it. CI only ever holds the **upload key** (`KEYSTORE_BASE64`), and because Nudge is enrolled in **Play App Signing** (mandatory for apps first published after Aug 2021), Google holds the real app-signing key — a leaked upload key can be rotated in Play Console without bricking installed users. The powerful `gplay` admin service-account key stays on the laptop (chmod 600, gitignored). To go fully tag-triggered later, create a **dedicated, least-privilege** Play service account (Nudge-only, "release manager" — never the account admin key) and store it as a GitHub secret; only then is CI-side Play upload acceptable. Ref: `~/ops/references/play-console-cli.md`.
 
@@ -217,12 +223,13 @@ After any feature addition or significant change:
 4. Install on Pixel 3: `adb -s 192.168.1.68:5555 install -r app/build/outputs/apk/debug/app-debug.apk`
 5. **QA on device** — spawn `device-tester` agent with specific test cases. PASS required before push.
 6. If QA passes: bump `versionCode` + `versionName` (patch) in `app/build.gradle.kts`
-7. Update CHANGELOG.md with version + date + changes
-8. Update this CLAUDE.md (architecture docs, feature descriptions) if applicable
-9. Commit all changes, tag, push: `git push origin main --tags`
-10. Create GitHub release (fast path): `gh release create vX.Y.Z nudge-vX.Y.Z.apk --title "vX.Y.Z" --generate-notes`
-11. **Publish to Google Play** — the standing default so Play never drifts behind GitHub again. After CI attaches the AAB, run `scripts/publish-to-play.sh X.Y.Z` — that ships to **100% of production** in one step, no follow-up owed. Stage (`STATUS=inProgress ROLLOUT=0.2 …`) only for a genuinely risky release, and file the promote step as a dated task if you do. Play credentials stay on the laptop — never in CI. See the **Releasing → Google Play** section for the security rationale.
-12. Update store listing copy if user-facing
+7. Update CHANGELOG.md with version + date + changes (the DEV-facing record)
+8. **Write the user-facing store notes** — `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`: what was fixed and what you'll notice, plain text, ≤ 500 bytes, `• ` per line, no markdown/issue numbers/URLs. Check with `scripts/check-store-notes.sh` (CI fails the build without it). See **Releasing → Store release notes**.
+9. Update this CLAUDE.md (architecture docs, feature descriptions) if applicable
+10. Commit all changes, tag, push: `git push origin main --tags`
+11. Create GitHub release (fast path): `gh release create vX.Y.Z nudge-vX.Y.Z.apk --title "vX.Y.Z" --generate-notes`
+12. **Publish to Google Play** — the standing default so Play never drifts behind GitHub again. After CI attaches the AAB, run `scripts/publish-to-play.sh X.Y.Z` — that ships to **100% of production** in one step, no follow-up owed. Stage (`STATUS=inProgress ROLLOUT=0.2 …`) only for a genuinely risky release, and file the promote step as a dated task if you do. Play credentials stay on the laptop — never in CI. See the **Releasing → Google Play** section for the security rationale.
+13. Update store listing copy if user-facing
 
 **This is the standard ship flow. Every change that touches user-facing behavior gets a device QA gate before push.**
 

@@ -4,6 +4,12 @@ All notable changes to Nudge are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+### Changed
+- Release notes on Google Play, IzzyOnDroid and F-Droid now come from per-version store notes
+  written by hand (`fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`) rather than
+  being flattened out of this file. This changelog is the developer-facing record; the store gets
+  a short, plain-text account of what was fixed and what you will notice.
+
 ### Fixed
 - **A hold you had already completed could be demanded again, minutes later, while you were still
   sitting in the app.** Screen on, never left, nothing tapped that would explain it — and then the
