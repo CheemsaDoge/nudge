@@ -324,18 +324,23 @@ class NudgeMonitorService : Service() {
         lastSeenConnectionGeneration = AccessibilityConnectionSignal.generation.value
         val globalEnabled = entryPoint.nudgePreferences().isGlobalEnabled.first()
         lastSeenGlobalEnabled = globalEnabled
+        // Read each of these ONCE. They were read a second time for the log line below, which is
+        // two more framework calls per evaluation and, worse, lets the log describe a different
+        // moment than the verdict it is explaining.
+        val permissionGranted = statusProvider.isPermissionGranted()
+        val serviceConnected = statusProvider.isServiceConnected()
         val health = ServiceHealth.evaluate(
             globalEnabled = globalEnabled,
-            permissionGranted = statusProvider.isPermissionGranted(),
-            serviceConnected = statusProvider.isServiceConnected()
+            permissionGranted = permissionGranted,
+            serviceConnected = serviceConnected
         )
 
         val previouslyDegraded = lastPublishedHealth?.isDegraded == true
         if (health != lastPublishedHealth) {
             entryPoint.monitorLogger().i(
                 "monitor health $lastPublishedHealth -> $health " +
-                    "(enabled=$globalEnabled granted=${statusProvider.isPermissionGranted()} " +
-                    "connected=${statusProvider.isServiceConnected()})"
+                    "(enabled=$globalEnabled granted=$permissionGranted " +
+                    "connected=$serviceConnected)"
             )
             lastPublishedHealth = health
         }
@@ -375,14 +380,16 @@ class NudgeMonitorService : Service() {
         // So there is one alert, and ProtectionCheck decides it. That keeps the policy the pure,
         // tested one for every caller: the confirming cycle that stops us crying wolf over a crash
         // the system heals in under three seconds (measured on the Pixel 3: 150ms-3s), the 12-hour
-        // cooldown, and copy that names the right recovery per fault. What this poll adds is
-        // LATENCY: reaching the same decision every 30s while the process is alive, instead of
-        // waiting up to 15 minutes for WorkManager. The worker remains the path that still runs
-        // when this service does not - which is the failure it was built for.
+        // cooldown, and copy that names the right recovery per fault. What this path adds is
+        // LATENCY: reaching the same decision the instant the accessibility binding changes, while
+        // the process is alive, instead of waiting up to 15 minutes for WorkManager. The worker
+        // remains the path that still runs when this service does not - which is the failure it
+        // was built for.
         //
         // Only when something is, or just was, wrong. A healthy check that stays healthy has
-        // nothing to decide and must not write to DataStore every 30 seconds for the life of the
-        // process.
+        // nothing to decide and must not write to DataStore on every evaluation for the life of
+        // the process - that write is itself a DataStore emission, and #63 is what happens when
+        // one of those turns into a notification post.
         if (health.isDegraded || previouslyDegraded) {
             ProtectionCheck.run(applicationContext)
         }
