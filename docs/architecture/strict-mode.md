@@ -32,3 +32,10 @@ The home-screen master switch (`globalEnabled`, `NudgePreferences`) must suppres
 - **Toggle-off teardown** (`onGlobalDisabled`, fired on the cached-flag's true→false transition): `InteractionTracker.clearAllCooldowns()` + `EmergencyPassManager.cancelAll()` + hide awareness overlays (on Main). The emergency-pass expiry kick is also gated on `isGlobalEnabled` inside the job.
 - **Strict Mode is independent**: the escape guard for the Settings/App-Info screens stays active regardless of `globalEnabled` (it's a commitment lock, not app-blocking), and Strict Mode's gate on turning the master toggle OFF is unchanged.
 - **Tested**: `InteractionTrackerCooldownTest.clearAllCooldowns…`; device-verified (Calculator blocked when ON, usable when OFF, re-blocked when ON).
+
+## Nuke Mode reuses the escape-route guard and gates the master toggle (2026-09-29)
+
+While Nuke is on, `maybeGuardSettingsEscape` engages as if Strict Mode were on (at the Nuke emergency
+code's length, never less than the Strict Mode difficulty, with Nuke copy via
+`StrictModeGuardActivity.EXTRA_NUKE`), and turning the master toggle OFF goes through Nuke's own gate
+before Strict Mode's. The guard's invariants are unchanged. Full model: `nuke-mode.md`.

@@ -285,6 +285,12 @@ one that no value-level unit test would notice, because every individual line of
   preceding line can be separated from what it guards by an innocent-looking refactor, and the resulting failure
   would be silent and unreachable from any JVM test.
 
+**Nuke Mode locks it the same way (2026-09-29).** With Nuke on, the master switch is the obvious
+one-tap way around Nuke, so `Protection.togglesInWidget` is `!(enabled && (strictModeEnabled ||
+nukeActive))`, `ToggleProtectionAction` carries `!strictModeEnabled && !nukeActive` on the write's own
+line, and `NudgeWidgetUpdater` collects `nukeState.active` so the widget re-renders when Nuke changes.
+The widget cannot end Nuke itself at all. See `nuke-mode.md`.
+
 ## Deep links: one mechanism, not two
 
 `MainActivity` already carried a bespoke `EXTRA_OPEN_SETTINGS` boolean for the protection alert. Adding a second

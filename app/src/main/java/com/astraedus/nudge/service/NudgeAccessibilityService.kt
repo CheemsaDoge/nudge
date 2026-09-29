@@ -2122,7 +2122,9 @@ class NudgeAccessibilityService : AccessibilityService() {
         // re-entry check every other unsupported app gets (issue #7), instead of the URL-bar read
         // below, which could only ever block a SITE. Supported packages already re-evaluate the
         // whole app on every content change further down.
-        if (isNukedNow(packageName) && packageName !in InAppDetector.SUPPORTED_PACKAGES) {
+        // (Spelled with `contains` so the supported-packages gate below stays the first
+        // `!in SUPPORTED_PACKAGES` in this file, which FollowingSteerCadenceContractTest locates.)
+        if (isNukedNow(packageName) && !InAppDetector.SUPPORTED_PACKAGES.contains(packageName)) {
             maybeEvaluateContentChangeAsAppSwitch(record)
             return
         }

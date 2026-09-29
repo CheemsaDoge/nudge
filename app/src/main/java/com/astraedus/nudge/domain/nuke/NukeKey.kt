@@ -38,6 +38,8 @@ object NukeKey {
 
     private val secureRandom: SecureRandom by lazy { SecureRandom() }
 
+    private const val HEX = "0123456789abcdef"
+
     /**
      * A fresh random token: [TOKEN_PREFIX] + [TOKEN_RANDOM_BYTES] bytes, base64url without padding.
      *
@@ -70,7 +72,14 @@ object NukeKey {
         if (normalized.isNullOrEmpty() || normalized.length > MAX_PAYLOAD_LENGTH) return null
         val digest = MessageDigest.getInstance("SHA-256")
             .digest(normalized.toByteArray(Charsets.UTF_8))
-        return digest.joinToString("") { "%02x".format(it) }
+        // Hand-rolled rather than `"%02x".format`: String.format consults the default locale, and
+        // a stored hash must be the same string on every phone in every language.
+        return buildString(digest.size * 2) {
+            digest.forEach { byte ->
+                val v = byte.toInt() and 0xff
+                append(HEX[v ushr 4]).append(HEX[v and 0x0f])
+            }
+        }
     }
 
     /**
