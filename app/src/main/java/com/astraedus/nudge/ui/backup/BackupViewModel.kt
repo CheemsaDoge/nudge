@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.astraedus.nudge.data.preferences.NudgePreferences
+import com.astraedus.nudge.di.IoDispatcher
 import com.astraedus.nudge.domain.lock.ChallengeState
 import com.astraedus.nudge.domain.usecase.ExportRulesUseCase
 import com.astraedus.nudge.domain.usecase.ImportOutcome
@@ -11,13 +12,13 @@ import com.astraedus.nudge.domain.usecase.ImportPreview
 import com.astraedus.nudge.domain.usecase.ImportRulesUseCase
 import com.astraedus.nudge.ui.lock.StrictModeGate
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
+import javax.inject.Inject
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import javax.inject.Inject
 
 @Immutable
 data class BackupUiState(
@@ -46,7 +47,8 @@ data class BackupUiState(
 class BackupViewModel @Inject constructor(
     private val exportRulesUseCase: ExportRulesUseCase,
     private val importRulesUseCase: ImportRulesUseCase,
-    nudgePreferences: NudgePreferences
+    nudgePreferences: NudgePreferences,
+    @IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BackupUiState())
@@ -104,7 +106,7 @@ class BackupViewModel @Inject constructor(
      */
     fun previewImport(readJson: suspend () -> String?) {
         viewModelScope.launch {
-            val json = withContext(Dispatchers.IO) { readJson() }
+            val json = withContext(ioDispatcher) { readJson() }
             if (json == null) {
                 _uiState.value = _uiState.value.copy(
                     importError = "Could not read that file.",

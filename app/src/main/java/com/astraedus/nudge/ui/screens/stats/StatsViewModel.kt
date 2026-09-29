@@ -8,12 +8,17 @@ import com.astraedus.nudge.data.db.entity.isShownConfrontation
 import com.astraedus.nudge.data.repository.InstalledAppsRepository
 import com.astraedus.nudge.data.repository.ScreenTimeProvider
 import com.astraedus.nudge.data.repository.UsageRepository
+import com.astraedus.nudge.di.IoDispatcher
 import com.astraedus.nudge.domain.engine.TimeTracker
 import com.astraedus.nudge.domain.usage.WeeklyUsage
 import com.astraedus.nudge.ui.screens.stats.charts.DayData
 import com.astraedus.nudge.ui.screens.stats.charts.TrendDay
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import javax.inject.Inject
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -28,10 +33,6 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
-import javax.inject.Inject
 
 @Immutable
 data class AppUsageStat(
@@ -73,7 +74,8 @@ class StatsViewModel @Inject constructor(
     private val installedAppsRepository: InstalledAppsRepository,
     private val screenTimeProvider: ScreenTimeProvider,
     private val timeTracker: TimeTracker,
-    private val statsCalculator: StatsCalculator
+    private val statsCalculator: StatsCalculator,
+    @IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) : ViewModel() {
 
     private val _selection = MutableStateFlow(StatsDaySelection.startingAt(LocalDate.now()))
@@ -130,7 +132,7 @@ class StatsViewModel @Inject constructor(
         .map { it.weekEnd }
         .distinctUntilChanged()
         .flatMapLatest { weekEnd ->
-            polled(isLive = weekEnd == LocalDate.now()) {
+            polled(isLive = weekEnd == LocalDate.now(), dispatcher = ioDispatcher) {
                 screenTimeProvider.getWeeklyUsage(weekEnd.toEpochMs())
             }
         }
@@ -144,7 +146,7 @@ class StatsViewModel @Inject constructor(
         .map { it.selected }
         .distinctUntilChanged()
         .flatMapLatest { date ->
-            polled(isLive = date == LocalDate.now()) {
+            polled(isLive = date == LocalDate.now(), dispatcher = ioDispatcher) {
                 val dayStartMs = date.toEpochMs()
                 val dayEndMs = if (date == LocalDate.now()) {
                     System.currentTimeMillis()
@@ -260,15 +262,23 @@ class StatsViewModel @Inject constructor(
          * already ended cannot change, so it emits once and completes — a phone left on a past
          * day used to keep waking every 30 s to re-read seven identical binder queries.
          *
-         * Runs on IO: `getWeeklyUsage` is a binder read plus a walk over a week of usage events,
-         * and this feeds a `stateIn(viewModelScope)`, i.e. the main thread.
+         * Runs off the main thread: `getWeeklyUsage` is a binder read plus a walk over a week
+         * of usage events, and this feeds a `stateIn(viewModelScope)`, i.e. the main thread. The
+         * dispatcher is a PARAMETER and not `Dispatchers.IO`: a real pool here is part of a
+         * `viewModelScope` chain no `TestScope` waits for, and the resume that lands after a
+         * test's `Dispatchers.resetMain()` throws into kotlinx's process-global collector and
+         * fails an unrelated test later in the fork (issue #53).
          */
-        internal fun <T> polled(isLive: Boolean, produce: suspend () -> T): Flow<T> = flow {
+        internal fun <T> polled(
+            isLive: Boolean,
+            dispatcher: CoroutineDispatcher,
+            produce: suspend () -> T
+        ): Flow<T> = flow {
             while (true) {
                 emit(produce())
                 if (!isLive) break
                 delay(POLL_INTERVAL_MS)
             }
-        }.flowOn(Dispatchers.IO)
+        }.flowOn(dispatcher)
     }
 }
