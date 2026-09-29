@@ -117,9 +117,18 @@ class WebDomainEnforcementContractTest {
             "a web block must pass the browser as the passthrough package",
             service.contains("EXTRA_PASSTHROUGH_PACKAGE, it.browserPackage")
         )
+        // Asked as the two ARGUMENTS that decide it rather than as a literal `UsageEvent(\n …
+        // packageName = packageName,` at one exact indentation: that spelling matched only as long
+        // as nobody reformatted the function, and a v1.18.4 refactor moved it for a while.
+        val decision = service.substringAfter("private suspend fun handleDecision(")
+            .substringBefore("\n    /**")
         assertTrue(
-            "the UsageEvent must stay attributed to the rule's app, not the browser",
-            service.contains("UsageEvent(\n                        packageName = packageName,")
+            "the block must be ATTRIBUTED to the rule's app, so the stat lands on Instagram",
+            decision.contains("packageName = packageName,")
+        )
+        assertTrue(
+            "and TARGETED at the app the user is in, which for a web block is the browser",
+            decision.contains("targetPackage = web?.browserPackage ?: packageName")
         )
     }
 

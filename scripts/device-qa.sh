@@ -48,6 +48,7 @@
 #   HOME_REOPEN_TRIALS=5           repeats inside the home-reopen case (#58)
 #   LIMIT_BURN_SECS=70             foreground time spent exhausting the 1-minute daily limit
 #   LIMIT_WAIT_SECS=45             how long to wait, after re-entry, for the limit to fire
+#   MIDSESSION_WAIT_SECS=240       ceiling on the mid-session sit (the case derives its own wait)
 #   QA_LOCK_OWNER=<name>           reuse a Pixel lock the caller already holds. ONLY works when
 #                                  this script runs in the caller's own process tree:
 #                                  `device-lock.sh` keys a holder on owner AND pid, and under
@@ -91,6 +92,9 @@ LIMIT_BURN_SECS="${LIMIT_BURN_SECS:-70}"
 # How long to wait, after re-entering, for the engine to notice. One window-state event is all
 # it takes, so this is generous slack rather than a duty cycle.
 LIMIT_WAIT_SECS="${LIMIT_WAIT_SECS:-45}"
+# Ceiling on the mid-session sit. The case computes its own wait from the budget it actually has
+# left plus one 30-second clock tick; this only stops a mis-derived limit from parking the run.
+MIDSESSION_WAIT_SECS="${MIDSESSION_WAIT_SECS:-240}"
 MAESTRO_BIN="${MAESTRO_BIN:-${HOME}/.maestro/bin/maestro}"
 GH_REPO="${GH_REPO:-astraedus/nudge}"
 
@@ -117,6 +121,7 @@ ALL_CASES=(
   home-reopen
   walkaway-count
   daily-limit-refresh
+  daily-limit-midsession
   notif-idle
   crash-check
   refusal-alert
@@ -236,11 +241,58 @@ appop_mode() { # op -> allow|deny|ignore|default
     sed -n 's/^[A-Z_]*: \([a-z]*\).*/\1/p'
 }
 
+# Is the phone actually awake and past the keyguard RIGHT NOW?
+#
+# Two separate facts and both are needed: `mWakefulness=Dozing` with `mDreamingLockscreen=false`
+# is a dark screen nobody can drive, and an awake screen still showing the PIN pad drives nothing
+# but the PIN pad. A missing `mDreamingLockscreen` line is read as "not locked", because the
+# question this asks is "is the keyguard in the way", and absence of evidence for a keyguard is
+# the right default on an OS version that does not print it.
+# NOT `… | grep -q …`, and this is the whole reason this helper reads the way it does.
+# This script runs under `set -o pipefail`. `grep -q` exits the moment it MATCHES, which SIGPIPEs
+# the `dumpsys` still writing upstream, so the pipeline's status is 141 and a SUCCESSFUL match
+# reads as a failure. Measured: this guard refused to start against a phone that was awake and
+# unlocked, twice in a row. The rest of the file sidesteps it by ending in `>/dev/null` (which
+# reads the stream to EOF) or by grepping a FILE; here the answer is simply not to pipe at all.
+screen_is_usable() {
+  local power window
+  power="$(ash dumpsys power 2>/dev/null | tr -d '\r')"
+  window="$(ash dumpsys window 2>/dev/null | tr -d '\r')"
+  case "$power" in *"mWakefulness=Awake"*) ;; *) return 1 ;; esac
+  case "$window" in *"mDreamingLockscreen=true"*) return 1 ;; esac
+  return 0
+}
+
+# Wake the phone, dismiss the keyguard, and hold both. Returns 1 if it could not.
+#
+# The PIN is known (1337) and lives in `~/bin/astra-pixel-unlock.sh` — the lock screen is never a
+# reason to stop and wait for a human. Two attempts, because the helper's own wake can race a
+# device that is mid-doze.
+wake_and_unlock() {
+  local i
+  for i in 1 2; do
+    "${HOME}/bin/astra-pixel-unlock.sh" >/dev/null 2>&1 ||
+      warn "unlock helper reported a problem (attempt ${i})"
+    ash settings put system screen_off_timeout 1800000 >/dev/null 2>&1
+    ash svc power stayon true >/dev/null 2>&1
+    sleep 2
+    screen_is_usable && return 0
+    warn "the screen is still asleep or behind the keyguard; retrying the unlock"
+  done
+  return 1
+}
+
+# The startup gate: refuse to run at all against a phone nobody can see.
+#
+# THE UNLOCK USED TO BE A `|| warn`, and that is how a whole run is wasted: on 2026-09-29 the phone
+# was dozing on its lock screen, the run warned and carried on, and every case failed against a
+# BLACK SCREEN — a full table of FAILs whose screenshots show nothing, which is indistinguishable
+# from a real regression until someone opens the album. A gate that knows it might be blind must
+# not start; dying here costs one line instead of twenty minutes and a false bug report.
 pin_screen() {
-  "${HOME}/bin/astra-pixel-unlock.sh" >/dev/null 2>&1 || warn "unlock helper reported a problem"
-  ash settings put system screen_off_timeout 1800000 >/dev/null 2>&1
-  ash svc power stayon true >/dev/null 2>&1
-  info "Screen pinned (stayon, 30-minute timeout)."
+  wake_and_unlock ||
+    die "the phone will not wake/unlock, so every case would run against a black screen and FAIL for the wrong reason. Run ~/bin/astra-pixel-unlock.sh by hand and look at the device."
+  info "Screen pinned (awake, unlocked, stayon, 30-minute timeout)."
 }
 
 # ─── Grants ───────────────────────────────────────────────────────────────────
@@ -809,6 +861,15 @@ case_setup() {
   info "pm clear — every case starts from a first-run install."
   ash pm clear "$APP_ID" >/dev/null 2>&1
   sleep 2
+  # `pm clear` RAISES THE KEYGUARD, and it does it with the screen still on, so nothing downstream
+  # looks obviously broken — the Maestro flow below just asserts against a lock screen and reports
+  # "Mindful app usage through gentle friction is not visible", which reads as an onboarding
+  # regression. Measured on the bench, sampling every 5s across this line:
+  #   14:40:07  wake=Awake stayOn=7 keyguard=false fg=com.google.android.calculator
+  #   14:40:13  wake=Awake stayOn=7 keyguard=true  fg=
+  # Clearing the data of the app that owns the running accessibility service is enough to do it.
+  # So the unlock is re-asserted HERE rather than only once at startup.
+  wake_and_unlock || { fail "pm clear left the phone behind the keyguard and it would not unlock"; return 1; }
   ensure_grants || return 1
   ash am force-stop "$YOUTUBE_PKG" >/dev/null 2>&1
   ash am force-stop "$LIMIT_PKG" >/dev/null 2>&1
@@ -1028,20 +1089,12 @@ case_walkaway_count() {
 # The fixture gives Calculator a 1-minute budget and mode NONE ("Not blocked"), so the app
 # opens freely and the limit is the only gate.
 #
-# THE BUDGET IS ENFORCED ON RE-ENTRY, NOT MID-SESSION, and that is a product fact rather than a
-# harness compromise. The 30-second foreground clock that could notice a budget running out
-# while you sit in the app is gated on
-# `autoKickAfterMinutes != null || (showTimeRemaining && dailyLimitMinutes != null)`
-# (`CounterCacheRefresher.needsForegroundTimeTick`) — so with a plain daily limit and no
-# time-remaining overlay, nothing re-evaluates until the next window-state event. Measured: 150s
-# sitting in Calculator produced exactly ONE evaluation, at t=0, `dailyUsageMs=93`.
-#
 # THE PRECONDITION IS EXPLICIT AND DELIBERATE: this case trips the limit by LEAVING AND
 # RE-ENTERING, never by waiting in the app. That keeps it a test of
 # [#50](https://github.com/astraedus/nudge/issues/50) — the stale "Daily limit reached" overlay
-# surviving a raised limit — and NOT a test of enforcement timing, which is an open product
-# decision (docs/BACKLOG.md, 2026-09-29). If mid-session enforcement is added later, this case
-# keeps passing unchanged, which is the point of drawing the line here.
+# surviving a raised limit — and NOT a test of enforcement timing. v1.18.4 added mid-session
+# enforcement (the budget now also runs out while you sit there) and this case passed unchanged,
+# which is the point of having drawn the line here; the timing itself is `daily-limit-midsession`.
 case_daily_limit_refresh() {
   local rc=0
   go_home
@@ -1153,7 +1206,15 @@ case_daily_limit_refresh() {
   return $rc
 }
 
-restore_daily_limit() {
+# Sets Calculator's daily limit to $1 MINUTES through the app's own UI.
+#
+# The Custom dialog is the only route to an arbitrary value (the presets start at 15m), and both
+# daily-limit cases need one: `daily-limit-refresh` puts the 1-minute fixture back, and
+# `daily-limit-midsession` DERIVES its limit from the minutes Android has already recorded for
+# Calculator today. Two copies of a seven-tap Compose flow is two things to re-find the next time
+# that screen moves.
+set_daily_limit_minutes() { # minutes
+  local minutes="$1" i
   nudge_route_home
   ui_wait_text "Manage Apps" 5 || scroll_to_text "Manage Apps" 6
   ui_tap_text "Manage Apps" 10 || return 1
@@ -1168,14 +1229,244 @@ restore_daily_limit() {
   ui_wait_text "Custom Daily Limit" 8 || return 1
   # The field is pre-filled with the current value, so clear it before typing.
   ui_tap_text "Value (minutes)" 5 || true
-  local i
   for ((i = 0; i < 6; i++)); do ash input keyevent KEYCODE_DEL >/dev/null 2>&1; done
-  ash input text "1" >/dev/null 2>&1
+  ash input text "$minutes" >/dev/null 2>&1
   sleep 1
   ui_tap_text "Set" 8 || return 1
   ui_tap_text "Save" 8 || return 1
   sleep 2
-  info "Calculator daily limit restored to 1m."
+  info "Calculator daily limit set to ${minutes}m."
+}
+
+restore_daily_limit() { set_daily_limit_minutes 1; }
+
+# Today's foreground total for Calculator in ms, read off the SERVICE'S OWN evaluation log
+# (`evaluate package=… dailyUsageMs=…`, BlockEngine, debug level — `setup` turns debug logging on).
+#
+# Not `dumpsys usagestats`: the number that matters is the one the block engine compares against
+# the limit, and that is a `queryEvents` pairing walk through `ScreenTimeProvider`. Reading a
+# different source would derive a limit the app does not agree with, which is the fixture-honesty
+# rule one layer out.
+calculator_daily_usage_ms() {
+  grep -o "evaluate package=${LIMIT_PKG} rules=[0-9]* dailyUsageMs=[0-9]*" "$LOGCAT_FILE" 2>/dev/null |
+    grep -o 'dailyUsageMs=[0-9]*' | tail -1 | cut -d= -f2
+}
+
+# ── daily-limit-midsession (v1.18.4): the budget blocks while you are still IN the app ──
+#
+# "Daily limits should definitely be enforced even mid session" (product call, 2026-09-29). Before
+# v1.18.4 they were not: the 30-second foreground clock was gated on
+# `autoKickAfterMinutes != null || (showTimeRemaining && dailyLimitMinutes != null)`, so a plain
+# budget was re-read by nothing and 150 seconds of continuous foreground time produced exactly ONE
+# evaluation, at t=0. You could sit past your limit forever as long as you never switched away.
+#
+# ## Why this case DERIVES its limit instead of using the fixture's 1 minute
+# The budget is OS-owned usage (`queryEvents`), so it is not reset by `pm clear` and it does not
+# reset between runs. This case needs the opposite precondition to `daily-limit-refresh`: it must
+# open the app with budget REMAINING and watch it run out. On any second run of the day the
+# fixture's 1 minute is long gone, and a fixed number cannot express "a bit more than whatever
+# Android has already recorded". So it reads the engine's own `dailyUsageMs` and sets the limit to
+# `usage + 2 minutes` — always 60-120 seconds of real budget, whatever the phone has been doing.
+#
+# ## Why the wait is one TICK longer than the budget, not "+20s"
+# Enforcement is as cheap as it is because it rides the clock that already exists, and that clock
+# ticks every `FOREGROUND_TICK_MS` (30s). So a block can legitimately land up to one tick after the
+# budget crosses zero — the same overshoot the time-based auto-kick documents. The wait is
+# `remaining + 45s`, and anything longer than that is a real failure rather than slack.
+#
+# ## The oracles, and why the UI tree is NOT read while sitting
+# A bare `uiautomator dump` is safe (measured: `Bound services` survives it), but this case's whole
+# subject is a 30-second clock inside the accessibility service, and polling a `UiAutomation`
+# session against it is the one thing this harness refuses to do on principle. So the sit is watched
+# entirely through non-invasive channels:
+#   · logcat: `block package=… reason=daily_limit_reached source=foreground_clock` — the service
+#     saying the budget ran out, on the clock path, which the engine's re-entry
+#     `reason=time_budget_exceeded` deliberately does not share a substring with.
+#   · `dumpsys activity activities`: sampled to prove we never left the app (a block that only
+#     happens because something bounced us out is the OLD behaviour passing a new test).
+# The tree is read ONCE, after the block, for the on-screen copy.
+#
+# ## The second half: enforcement keeps working, counting does not repeat
+# The limit screen is pushed back behind the app WITHOUT going home, which is the same sitting
+# (Nudge's own overlay is not a departure — `BlockLaunchGate.arrivalAfterSignal`). The user must meet
+# the block again and the Blocked count must NOT move, which is issue #36's invariant on a path that
+# is now driven by a timer. Total delta for the whole episode: exactly +1.
+case_daily_limit_midsession() {
+  local rc=0 i
+  go_home
+  start_logcat
+  ash am force-stop "$LIMIT_PKG" >/dev/null 2>&1
+  sleep 1
+
+  # 1. Measure. One launch is enough to make the engine log today's total for this package.
+  ash monkey -p "$LIMIT_PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
+  local usage_ms=""
+  for ((i = 0; i < 20; i++)); do
+    usage_ms="$(calculator_daily_usage_ms)"
+    [[ -n "$usage_ms" ]] && break
+    sleep 1
+  done
+  if [[ -z "$usage_ms" ]]; then
+    fail "no 'evaluate package=${LIMIT_PKG} … dailyUsageMs=' line — is debug logging on? run 'setup'"
+    stop_logcat; return 1
+  fi
+  info "Android has recorded ${usage_ms}ms of Calculator today"
+
+  # The limit may already be spent, in which case we are looking at the limit screen. Leave it
+  # before driving Nudge's UI.
+  ui_snapshot
+  if ui_has "Daily limit reached"; then
+    info "today's budget is already spent — leaving the limit screen before raising it"
+    ui_tap_text "Go Back" 10 || true
+    sleep 2
+  fi
+
+  # 2. Derive and set: usage + 2 whole minutes, so entry has 60-120s of real budget left.
+  local limit_min=$(( usage_ms / 60000 + 2 ))
+  set_daily_limit_minutes "$limit_min" || { fail "could not set the derived ${limit_min}m limit"; stop_logcat; return 1; }
+
+  # 3. Baseline the Blocked count BEFORE entering — reading the dashboard later would mean leaving
+  #    the app, and this case may not leave it until the block has landed.
+  nudge_route_home
+  local before b_before w_before
+  before="$(read_blocked_counts)" || { fail "could not read the week summary on the dashboard"; stop_logcat; return 1; }
+  b_before="${before% *}"; w_before="${before#* }"
+  info "before: blocked=${b_before} walkedAway=${w_before}"
+
+  # 4. Open the app fresh, with budget left. A fresh logcat so the lines counted below cannot be
+  #    leftovers from the measurement launch above.
+  go_home
+  ash am force-stop "$LIMIT_PKG" >/dev/null 2>&1
+  # The counter cache is a 10-second snapshot refreshed off foreground events, and the clock reads
+  # the LIMIT out of it. Entering immediately after a save can therefore be evaluated against the
+  # previous limit. Home events plus the TTL settle it.
+  sleep 12
+  start_logcat
+  ash monkey -p "$LIMIT_PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
+  wait_fg "$LIMIT_PKG" 15 || { fail "${LIMIT_PKG} did not come to the foreground"; stop_logcat; return 1; }
+  sleep 3
+  shot 50-calculator-fresh-budget
+  # NOT `ui_snapshot` — AND THIS IS THE CASE'S CENTRAL CONSTRAINT, not a style preference.
+  #
+  # A `uiautomator dump` DESTROYS this app's accessibility service for the duration of the dump.
+  # Measured here, from this case's own capture:
+  #   15:17:44.905  adbd … 'uiautomator dump …'
+  #   15:17:45.634  app clock stopped key=…calculator reason=service_destroyed
+  #   15:17:46.806  accessibility service connected
+  # The file header's "a bare dump is safe" holds for READING A SCREEN AFTER A BLOCK, which is all
+  # the other cases do with it. It does NOT hold for a case whose subject is a 30-second clock
+  # INSIDE that service: the teardown cancels the clock, and (before the v1.18.4 rebind fix) nothing
+  # restarted it for a user who was sitting still. This case killed the thing it was testing, twice,
+  # and read the result as "the limit never fired".
+  #
+  # So the entry state is asserted from the two oracles that touch no accessibility session at all:
+  # who is in front (`dumpsys activity activities`) and what the service itself said (logcat).
+  local fg_now
+  fg_now="$(foreground_package)"
+  if [[ "$fg_now" != "$LIMIT_PKG" ]]; then
+    fail "expected to be sitting in ${LIMIT_PKG} at entry, but '${fg_now}' is in front — a block overlay would be Nudge's own package"
+    stop_logcat; return 1
+  fi
+  if (( $(log_count "block package=${LIMIT_PKG} reason=daily_limit_reached") > 0 )); then
+    fail "entered with the limit already tripped (usage=${usage_ms}ms, derived limit=${limit_min}m) — this case needs budget REMAINING at entry"
+    stop_logcat; return 1
+  fi
+
+  # How long the budget really has left, from the entry evaluation the engine just logged.
+  local entry_usage remaining_s wait_s
+  entry_usage="$(calculator_daily_usage_ms)"
+  entry_usage="${entry_usage:-$usage_ms}"
+  remaining_s=$(( (limit_min * 60000 - entry_usage) / 1000 ))
+  (( remaining_s < 0 )) && remaining_s=0
+  wait_s=$(( remaining_s + 45 ))
+  (( wait_s > MIDSESSION_WAIT_SECS )) && wait_s="$MIDSESSION_WAIT_SECS"
+  info "entered with ${remaining_s}s of budget left; waiting up to ${wait_s}s WITHOUT leaving the app"
+
+  # 5. Sit still. No taps, no swipes, no UI dumps — the only thing that may happen is the clock.
+  local limited=0 left_the_app="" fg
+  for ((i = 0; i < wait_s; i += 5)); do
+    if (( $(log_count "block package=${LIMIT_PKG} reason=daily_limit_reached") > 0 )); then
+      limited=1
+      info "the budget ran out after ~${i}s of sitting still"
+      break
+    fi
+    fg="$(foreground_package)"
+    # Nudge appearing is the block itself arriving; the LAUNCHER appearing would mean something
+    # bounced us out, and a block after that would be the old re-entry behaviour in disguise.
+    [[ "$fg" == "$LAUNCHER_PKG" ]] && left_the_app="$fg"
+    sleep 5
+  done
+
+  if [[ -n "$left_the_app" ]]; then
+    fail "the app was left during the sit (saw '${left_the_app}' in front) — this case only proves anything while we stay inside"
+    rc=1
+  fi
+  if (( limited == 0 )); then
+    fail "sat ${wait_s}s inside ${LIMIT_PKG} with a ${limit_min}m budget and the limit never fired mid-session"
+    grep -E "evaluate package=${LIMIT_PKG}|clock (started|stopped|exited)|daily_limit_reached" \
+      "$LOGCAT_FILE" 2>/dev/null | tail -12 >&2
+    stop_logcat
+    # THE CAPTURE IS THE WHOLE POINT OF FAILING HERE. Every later case calls `start_logcat`, which
+    # TRUNCATES this file, so a failure that does not save it leaves nothing to read afterwards --
+    # which is exactly what happened the first time this case failed, and it cost a device cycle.
+    # "The clock never ticked", "it ticked and the budget had not crossed" and "it blocked and the
+    # grep missed it" are three different bugs and only the capture tells them apart.
+    cp -f "$LOGCAT_FILE" "${ALBUM}/logcat-daily-limit-midsession-FAIL.txt" 2>/dev/null || true
+    return 1
+  fi
+
+  # The block landed. Prove it reached the SCREEN without opening an accessibility session: the
+  # overlay is its own activity, so the foreground moving from Calculator to Nudge is the arrival.
+  local fg_blocked
+  for ((i = 0; i < 10; i++)); do
+    fg_blocked="$(foreground_package)"
+    [[ "$fg_blocked" == "$APP_ID" ]] && break
+    sleep 1
+  done
+  shot 51-daily-limit-midsession
+  if [[ "$fg_blocked" != "$APP_ID" ]]; then
+    fail "the limit fired but Nudge's overlay never came to the front (got '${fg_blocked}')"
+    rc=1
+  fi
+
+  # 6. Push the app back in front WITHOUT going home: same sitting, so the block must be shown
+  #    again and must NOT be counted again.
+  ash monkey -p "$LIMIT_PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
+  sleep 8
+  shot 52-limit-screen-again
+  local fg_again
+  fg_again="$(foreground_package)"
+  [[ "$fg_again" == "$APP_ID" ]] ||
+    warn "re-fronting the app did not put the limit screen back (got '${fg_again}') — the count assertion below is the real gate"
+
+  # 7. Leave for good and read the count. +1 for the whole episode: one arrival, one row, however
+  #    many times the clock re-launched the screen.
+  go_home
+  nudge_route_home
+  local after b_after w_after
+  after="$(read_blocked_counts)" || { fail "could not re-read the week summary"; stop_logcat; return 1; }
+  b_after="${after% *}"; w_after="${after#* }"
+  info "after:  blocked=${b_after} walkedAway=${w_after}"
+  shot 53-dashboard-after-midsession
+  stop_logcat
+  cp -f "$LOGCAT_FILE" "${ALBUM}/logcat-daily-limit-midsession.txt" 2>/dev/null || true
+
+  local db=$(( b_after - b_before )) dw=$(( w_after - w_before ))
+  local relaunches
+  relaunches="$(log_count "block package=${LIMIT_PKG} reason=daily_limit_reached")"
+  (( db == 1 )) || {
+    fail "Blocked moved by ${db}, expected exactly +1 (the mid-session block is one confrontation, whatever the clock did: ${relaunches} daily_limit_reached lines)"
+    rc=1
+  }
+  (( dw == 0 )) || { fail "Walked away moved by ${dw}, expected 0 — nothing was declined in this case"; rc=1; }
+
+  if [[ "${RUNNING_ALL:-0}" == "1" ]]; then
+    info "part of 'all' — leaving the limit at ${limit_min}m; the next run's setup re-imports the fixture."
+  else
+    restore_daily_limit || warn "could not restore the 1-minute Calculator limit — run 'setup' before re-running the daily-limit cases"
+  fi
+  CASE_NOTE="usage=${usage_ms}ms, derived limit=${limit_min}m, fired mid-session after ~${remaining_s}s, ${relaunches} clock blocks, Blocked ${b_before}->${b_after}"
+  return $rc
 }
 
 # ── notif-idle (#63): the ongoing notification is posted on CHANGE, never on a timer ──
@@ -1308,9 +1599,29 @@ wait_notif_change() { # previous_update_ms timeout_secs
 }
 
 CRASH_BASELINE=""
+# How many dropbox entries record OUR APP CRASHING or hanging.
+#
+# COUNTED BY TAG, not by "the text mentions our package", and the difference is a red gate.
+# `dumpsys dropbox` also holds `system_server_wtf` entries — the SYSTEM's own soft assertions — and
+# several of them name whatever app they were about. Measured on 2026-09-29: this run's `pm clear`
+# raced a scheduled `androidx.work` job and the JobScheduler logged
+# `Hasn't been prepared: JobStatus{… dev.astraedus.nudge/…SystemJobService …}`, so the old count
+# rose by one and `crash-check` FAILED on a run where `Crashed services:{}` was empty and the app
+# never died once. A gate that reports the harness's own side effects as app crashes gets ignored,
+# which is the only way a crash gate can really fail.
+#
+# The tags below are the ones Android writes when an APP process crashes, crashes natively, or ANRs.
+# A `system_server_wtf` naming us is worth reading, and `case_crash_check` prints it — as a warning.
+CRASH_TAGS='data_app_crash|data_app_native_crash|data_app_anr|system_app_crash|system_app_native_crash|system_app_anr'
+
+count_app_crashes() {
+  local n
+  n="$(ash "dumpsys dropbox --print | grep -E '^[0-9-]+ [0-9:]+ ($CRASH_TAGS) ' -A6 | grep -c '^Process: ${APP_ID}'" 2>/dev/null | tr -d '\r')"
+  printf '%s' "${n:-0}"
+}
+
 crash_baseline() {
-  CRASH_BASELINE="$(ash "dumpsys dropbox --print | grep -c ${APP_ID}" 2>/dev/null | tr -d '\r')"
-  CRASH_BASELINE="${CRASH_BASELINE:-0}"
+  CRASH_BASELINE="$(count_app_crashes)"
 }
 
 case_crash_check() {
@@ -1321,15 +1632,19 @@ case_crash_check() {
     fail "accessibility reports crashed services: ${crashed}"
     rc=1
   fi
-  now="$(ash "dumpsys dropbox --print | grep -c ${APP_ID}" 2>/dev/null | tr -d '\r')"
-  now="${now:-0}"
-  info "dropbox entries mentioning ${APP_ID}: baseline=${CRASH_BASELINE} now=${now}"
+  now="$(count_app_crashes)"
+  info "dropbox crash/ANR entries for ${APP_ID}: baseline=${CRASH_BASELINE} now=${now}"
   if (( now > CRASH_BASELINE )); then
-    fail "dropbox gained $(( now - CRASH_BASELINE )) entries mentioning ${APP_ID} during this run"
-    ash "dumpsys dropbox --print | grep -A20 ${APP_ID}" 2>/dev/null | tail -60 >&2
+    fail "${APP_ID} crashed or ANRed $(( now - CRASH_BASELINE )) time(s) during this run"
+    ash "dumpsys dropbox --print | grep -E '^[0-9-]+ [0-9:]+ ($CRASH_TAGS) ' -A25" 2>/dev/null | tail -80 >&2
     rc=1
   fi
-  CASE_NOTE="Crashed services:{} · dropbox delta $(( now - CRASH_BASELINE ))"
+  # The system's own soft assertions are NOT app crashes, and must not fail this case -- but they
+  # are worth seeing, because a flood of them naming us usually means we are provoking the platform.
+  local wtf
+  wtf="$(ash "dumpsys dropbox --print | grep -c 'system_server_wtf'" 2>/dev/null | tr -d '\r')"
+  info "system_server_wtf entries on the device (not app crashes): ${wtf:-0}"
+  CASE_NOTE="Crashed services:{} · app crash/ANR delta $(( now - CRASH_BASELINE ))"
   return $rc
 }
 
@@ -1459,6 +1774,16 @@ run_case() { # name
   if [[ "$name" != "setup" ]] && ! a11y_is_bound; then
     warn "accessibility service was not bound entering '${name}' — repairing"
     ensure_grants || { record "$name" FAIL 0 "precondition: accessibility service would not bind"; return 0; }
+  fi
+  # The SECOND per-case precondition, and it is exactly as load-bearing as the first: a case that
+  # runs against a dark or locked screen fails on the phone's power state, not on the build, and
+  # says nothing about which. `pm clear` raises the keyguard on its own (see `case_setup`), the
+  # `notif-idle` case deliberately lets the device doze, and the screen can simply time out during
+  # a long one — so this is checked per case, where a failure lands on the case that actually hit
+  # it instead of on whichever one came next.
+  if ! screen_is_usable; then
+    warn "the screen was dark or locked entering '${name}' — waking it"
+    wake_and_unlock || { record "$name" FAIL 0 "precondition: the phone would not wake/unlock"; return 0; }
   fi
   start=$(date +%s)
   "$fn"; rc=$?

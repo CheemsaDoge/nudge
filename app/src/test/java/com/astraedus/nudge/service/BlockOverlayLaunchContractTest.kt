@@ -61,6 +61,20 @@ class BlockOverlayLaunchContractTest {
         .lines()
         .joinToString("\n") { line -> line.substringBefore("//") }
 
+    /**
+     * One function's body from the service, comments stripped and stopped at the next KDoc block.
+     *
+     * Scoping matters more than it looks: `substring(indexOf(signature))` reaches the END OF THE
+     * FILE, so a grep meant for one function silently answers with a neighbour's code -- which is
+     * how these tests would have gone on passing when the claim and the row moved out of
+     * `handleDecision` into `countBlockShown`.
+     */
+    private fun functionBody(signature: String): String {
+        val start = service.indexOf(signature)
+        assertTrue("$signature must exist", start >= 0)
+        return stripComments(service.substring(start).substringBefore("\n    /**"))
+    }
+
     /** The body of `launchBlockOverlay`, comments stripped. */
     private val launchHelper: String by lazy {
         val body = service.substringAfter("private fun launchBlockOverlay(")
@@ -131,7 +145,12 @@ class BlockOverlayLaunchContractTest {
     fun `every launch site names the block it is showing, and the parameter has no default`() {
         val code = stripComments(service)
         val callSites = Regex("""launchBlockOverlay\(""").findAll(code).count() - 1 // the decl
-        assertTrue("there must be launch sites to check", callSites >= 4)
+        // THREE, not four: v1.18.4 removed the daily-limit launch site, which now re-evaluates and
+        // reaches `handleDecision`'s launch instead of owning one (see "the clock reports a spent
+        // budget and lets the rules decide"). The remaining three are the rule block, the auto-kick
+        // cooldown and the web auto-kick cooldown. A FLOOR, not a count: this is only here so the
+        // two assertions below cannot pass by finding nothing.
+        assertTrue("there must be launch sites to check (found $callSites)", callSites >= 3)
         assertEquals(
             "every launchBlockOverlay call must pass a decisionKey; a launch that does not say " +
                 "which block it is cannot be told apart from a stale pending overlay",
@@ -253,9 +272,10 @@ class BlockOverlayLaunchContractTest {
      */
     @Test
     fun `the count is gated, and the gate is between the launch and the row`() {
-        val start = service.indexOf("private suspend fun handleDecision(")
-        assertTrue("handleDecision must exist", start >= 0)
-        val body = stripComments(service.substring(start))
+        // Scoped with `functionBody`, not `substring(indexOf(...))`: the latter reaches the end of
+        // the FILE, so the three indices below could be satisfied by a neighbouring function's code
+        // and this test would pass whatever handleDecision itself did.
+        val body = functionBody("private suspend fun handleDecision(")
         val launch = index(body, "launchBlockOverlay(")
         val claim = index(body, "claimConfrontation(")
         val recorded = index(body, "wasBlocked = true")
@@ -268,6 +288,55 @@ class BlockOverlayLaunchContractTest {
     }
 
     /**
+     * THE CLOCK REPORTS, IT DOES NOT ENFORCE (v1.18.4).
+     *
+     * A daily budget running out mid-session is noticed by a 30-second clock, and until v1.18.4 that
+     * path built its own block: first by starting the activity itself, then by calling
+     * `launchBlockOverlay` directly. Either way it was a SECOND implementation of "block this app",
+     * which is exactly why it wrote no `UsageEvent` for two versions while the rule path did
+     * (`docs/BACKLOG.md`, DB-verified on device 2026-08-20) — a second implementation is the thing
+     * that drifts.
+     *
+     * It now reports the fact and re-evaluates, so the row, the arrival invariant, grayscale and the
+     * launch gate all come from `handleDecision`. Two properties are load-bearing and both are
+     * asserted: the callback enforces NOTHING itself, and the re-evaluation may only escalate to a
+     * HARD_BLOCK (acting on a DELAY answer would put a countdown in front of someone already inside
+     * the app, from a timer, having done nothing).
+     */
+    @Test
+    fun `the clock reports a spent budget and lets the rules decide`() {
+        val callback = stripComments(service)
+            .substringAfter("onTimeLimitExceeded = {")
+            .substringBefore("autoKickExecutor = AutoKickExecutor(")
+        assertFalse(
+            "the clock's callback must not launch, gate or count anything itself -- that is the " +
+                "second implementation this fix removed",
+            callback.contains("launchBlockOverlay(") ||
+                callback.contains("claimConfrontation(") ||
+                callback.contains("logEvent(")
+        )
+        assertTrue(
+            "it must hand the fact to enforceExhaustedBudget",
+            callback.contains("enforceExhaustedBudget(")
+        )
+
+        val enforce = functionBody("private suspend fun enforceExhaustedBudget(")
+        assertTrue(
+            "which must RE-DERIVE the decision from the rules rather than trust the 10-second " +
+                "counter-cache snapshot (a raised or removed limit is issue #50's own shape)",
+            enforce.contains("evaluateBlockUseCase().invoke(")
+        )
+        assertTrue(
+            "and may only ever escalate to a HARD_BLOCK",
+            enforce.contains("decision.mode != BlockMode.HARD_BLOCK")
+        )
+        assertTrue(
+            "and then goes through the one block path",
+            enforce.contains("handleDecision(")
+        )
+    }
+
+    /**
      * The arrival invariant is allowed to refuse exactly one thing: the `UsageEvent` row. It must
      * never be allowed to refuse the overlay itself, that would mean a storm SUPPRESSES the block
      * the user is actually facing, not merely its bookkeeping -- the opposite of what issue #36
@@ -275,9 +344,7 @@ class BlockOverlayLaunchContractTest {
      */
     @Test
     fun `the row is the only thing the arrival invariant may refuse`() {
-        val start = service.indexOf("private suspend fun handleDecision(")
-        assertTrue("handleDecision must exist", start >= 0)
-        val body = stripComments(service.substring(start))
+        val body = functionBody("private suspend fun handleDecision(")
         val claim = index(body, "claimConfrontation(")
         val recorded = index(body, "wasBlocked = true")
         assertFalse(

@@ -850,31 +850,29 @@ class NudgeAccessibilityService : AccessibilityService() {
             passthroughManager = passthrough,
             logger = entryPoint.nudgeLogger(),
             serviceScope = serviceScope,
-            // The daily-limit hard block is the fourth block-overlay launch site, and the one most
-            // likely to land late: it fires from a 30-second clock tick rather than from a
-            // foreground event, so the user can easily be elsewhere by the time the usage read comes
-            // back. It used to own a Context and build its own intent, which put a launch outside
-            // this service and therefore outside any gate. It goes through [launchBlockOverlay] now,
-            // like the other three.
+            // THE CLOCK REPORTS, IT DOES NOT DECIDE (v1.18.4).
+            //
+            // This used to own a Context and start `BlockOverlayActivity` itself, then (still
+            // wrongly) build its own launch inside this service: either way it was a SECOND
+            // implementation of "block this app", which is why it wrote no `UsageEvent` for two
+            // versions while the rule path did (`docs/BACKLOG.md`). It now hands the fact back to
+            // [enforceExhaustedBudget], which re-derives the decision from the rules and goes
+            // through [handleDecision] like every other block -- one launch gate, one arrival
+            // invariant, one row.
             onTimeLimitExceeded = { limitedPackage, dailyLimitMinutes ->
-                launchBlockOverlay(
-                    targetPackage = limitedPackage,
-                    attributedPackage = limitedPackage,
-                    // The daily-limit variant is a DIFFERENT SCREEN from a plain hard block -- its
-                    // own copy, its own reason -- and it is the one issue #50 was reported on, so
-                    // it says so here rather than collapsing into the mode alone.
-                    decisionKey = BlockLaunchGate.decisionFingerprint(
-                        attributedPackage = limitedPackage,
-                        blockMode = "HARD_BLOCK",
-                        dailyLimited = true
-                    )
-                ) {
-                    putExtra(BlockOverlayActivity.EXTRA_BLOCK_MODE, "HARD_BLOCK")
-                    putExtra(BlockOverlayActivity.EXTRA_PACKAGE_NAME, limitedPackage)
-                    putExtra(BlockOverlayActivity.EXTRA_RULE_NAME, "Daily limit reached")
-                    putExtra(BlockOverlayActivity.EXTRA_DAILY_TIME_REMAINING_MS, 0L)
-                    putExtra(BlockOverlayActivity.EXTRA_DAILY_LIMIT_MINUTES, dailyLimitMinutes)
-                }
+                // Logged unconditionally and BEFORE the re-evaluation can decline. This is the only
+                // enforcement in the app with no user action behind it, so "the budget ran out and
+                // the rules no longer agree" and "the budget never ran out" have to be
+                // distinguishable in logcat -- the ambiguity that cost this repo a release cycle
+                // twice. It is also the device gate's oracle for the mid-session case, and
+                // deliberately NOT the engine's `reason=time_budget_exceeded` wording: the two are
+                // different TRIGGERS for the same decision (a foreground event vs a clock tick) and
+                // a shared substring would make a grep for either match both.
+                entryPoint.nudgeLogger().i(
+                    "block package=$limitedPackage reason=daily_limit_reached " +
+                        "limitMinutes=$dailyLimitMinutes source=foreground_clock"
+                )
+                serviceScope.launch { enforceExhaustedBudget(limitedPackage) }
                 Unit
             }
         )
@@ -1009,7 +1007,54 @@ class NudgeAccessibilityService : AccessibilityService() {
         serviceScope.launch {
             counterCache.forceRefresh { loadCounterCacheEntries() }
             entryPoint.nudgeLogger().d("counter cache eagerly populated packages=${counterCache.snapshot().size}")
+            // AND RESTART THE CLOCK FOR WHATEVER THE USER IS ALREADY SITTING IN.
+            //
+            // A rebind destroys this service instance, which cancels `serviceScope` and with it the
+            // foreground clock. The clock is only ever started from `evaluateForegroundPackage`,
+            // i.e. from a window EVENT — and somebody sitting still generates none. So without this,
+            // every rebind silently ends the clock for the rest of that sitting: the time-based
+            // auto-kick stops, the time-remaining overlay freezes, and (since v1.18.4) a daily limit
+            // stops being enforced mid-session. Nothing is visibly broken and nothing is logged; the
+            // user simply stops being stopped.
+            //
+            // Measured on the bench, and NOT a contrived case -- one `uiautomator dump` from the QA
+            // harness was enough:
+            //   15:17:45.634  app clock stopped key=…calculator reason=service_destroyed
+            //   15:17:46.806  accessibility service connected
+            //   (no clock again, for the remaining 100 seconds of the sitting)
+            // `docs/architecture/service-lifecycle-and-watchdog.md` records this device rebinding
+            // under memory pressure on its own, so the field version needs no harness at all.
+            //
+            // The CLOCK only, deliberately -- not a full re-evaluation. A rebind is not evidence the
+            // user did anything (`PassthroughManager.onObservationResumed` makes the same call for
+            // the same reason), so this restores observation and lets the ordinary tick decide,
+            // gated and counted like any other block, rather than re-blocking on reconnect.
+            withContext(Dispatchers.Main) { restartForegroundClockAfterRebind() }
         }
+    }
+
+    /**
+     * Restart the foreground-time clock for the app that is in front RIGHT NOW, after a rebind.
+     *
+     * Reads the live window rather than any remembered state, because there is none: a rebind builds
+     * a NEW service instance, so `lastPackage` is null and the event that would have set it happened
+     * to a service that no longer exists.
+     *
+     * Silent and harmless when there is nothing to do -- no active window, our own UI in front, or a
+     * package nothing clock-driven is configured for. [updateForegroundTimeTicker] makes that last
+     * call itself.
+     */
+    private fun restartForegroundClockAfterRebind() {
+        val front = try {
+            rootInActiveWindow?.packageName?.toString()
+        } catch (e: Exception) {
+            entryPoint.nudgeLogger().w("could not read the active window after rebind", e)
+            null
+        }
+        if (front.isNullOrBlank() || front == packageName) return
+        if (counterCache.getEntry(front)?.needsForegroundTimeTick != true) return
+        entryPoint.nudgeLogger().i("foreground clock restarted after rebind package=$front")
+        updateForegroundTimeTicker(front)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -1480,6 +1525,15 @@ class NudgeAccessibilityService : AccessibilityService() {
             // happened to fire again. The session's own reset paths clear it.
             interactionHandler.onAppChanged(packageName)
             timeRemainingHandler.resetDebounce()
+            // TRACKED IS NOT THE SAME AS WANTS-AN-OVERLAY, and only the branch above ever said so.
+            //
+            // `clearOverlays` hides both awareness overlays for an UNtracked app, and nothing did
+            // it for a tracked app that wants neither -- so walking from an app with the counter on
+            // into one without it left the previous app's counter floating over it. Latent since
+            // v1.10.0 for time-kick-only rules; a daily limit alone now puts a package in the cache
+            // too, which is a far more common shape, so the hide is made explicit here rather than
+            // left to a membership test that no longer answers this question.
+            hideUnwantedAwarenessOverlays(packageName)
         }
 
         // Start/stop the foreground-time clock for this app. Deliberately BEFORE the emergency-pass,
@@ -1506,14 +1560,19 @@ class NudgeAccessibilityService : AccessibilityService() {
         // exists, never remembered from one that used to: delete a rule (or turn its auto-kick off)
         // with a cooldown armed and the in-memory map would keep ejecting the user from an app
         // nothing is configured to block, invisibly, for the whole cooldown. See [CooldownGate].
-        val hasRuleEntry = counterCache.hasEntry(packageName)
-        if (CooldownGate.isStale(hasRuleEntry, tracker.isInCooldown(packageName))) {
+        //
+        // The authority is `configuresAutoKick`, NOT bare cache membership: since a daily limit
+        // alone now puts a package in the cache, membership would have said "some rule still wants
+        // this package" for a rule that cannot kick at all, and turning auto-kick off while keeping
+        // a limit would have left the armed cooldown enforcing. Same question, narrower evidence.
+        val autoKickConfigured = counterCache.getEntry(packageName)?.configuresAutoKick == true
+        if (CooldownGate.isStale(autoKickConfigured, tracker.isInCooldown(packageName))) {
             entryPoint.nudgeLogger().i(
-                "stale auto-kick cooldown dropped package=$packageName reason=no_rule_entry"
+                "stale auto-kick cooldown dropped package=$packageName reason=no_auto_kick_configured"
             )
             tracker.clearCooldown(packageName)
         }
-        if (CooldownGate.shouldEnforce(hasRuleEntry, tracker.isInCooldown(packageName))) {
+        if (CooldownGate.shouldEnforce(autoKickConfigured, tracker.isInCooldown(packageName))) {
             val remainingMs = tracker.getCooldownRemainingMs(packageName)
             val remainingSeconds = ((remainingMs + 999) / 1000).toInt().coerceAtLeast(1)
             entryPoint.nudgeLogger().i(
@@ -1708,14 +1767,17 @@ class NudgeAccessibilityService : AccessibilityService() {
         val tracker = entryPoint.interactionTracker()
         // Same gate as the app-level cooldown, for the same reason: a cooldown keyed on a domain no
         // rule enforces on any more is stale state, and acting on it blocks a site nothing blocks.
-        val hasRuleEntry = counterCache.getEntry(key) != null
-        if (CooldownGate.isStale(hasRuleEntry, tracker.isInCooldown(key))) {
+        // `configuresAutoKick`, not mere membership, for the same reason the app path uses it: a
+        // cache entry no longer implies anything can kick, and a web rule could hold an entry for
+        // another clock-driven reason (per-domain daily budgets are an open backlog item).
+        val autoKickConfigured = counterCache.getEntry(key)?.configuresAutoKick == true
+        if (CooldownGate.isStale(autoKickConfigured, tracker.isInCooldown(key))) {
             entryPoint.nudgeLogger().i(
-                "stale web auto-kick cooldown dropped domain=$domain reason=no_rule_entry"
+                "stale web auto-kick cooldown dropped domain=$domain reason=no_auto_kick_configured"
             )
             tracker.clearCooldown(key)
         }
-        if (!CooldownGate.shouldEnforce(hasRuleEntry, tracker.isInCooldown(key))) return false
+        if (!CooldownGate.shouldEnforce(autoKickConfigured, tracker.isInCooldown(key))) return false
 
         val remainingMs = tracker.getCooldownRemainingMs(key)
         val remainingSeconds = ((remainingMs + 999) / 1000).toInt().coerceAtLeast(1)
@@ -2549,7 +2611,8 @@ class NudgeAccessibilityService : AccessibilityService() {
                 // answers "has the user arrived here since the last time we counted them", so every
                 // mechanism that can re-launch an overlay by itself -- an overlay stopped and
                 // finished by a screen-off or a re-fronting app, a re-delivery through
-                // `onNewIntent`, the walk-away fail-safe popping the app back -- also re-counted it,
+                // `onNewIntent`, the walk-away fail-safe popping the app back, and since v1.18.4
+                // the 30-second foreground clock behind a spent daily budget -- also re-counted it,
                 // once per iteration, for as long as it ran.
                 val counted = entryPoint.blockLaunchGuard().claimConfrontation(
                     targetPackage = web?.browserPackage ?: packageName,
@@ -2582,6 +2645,67 @@ class NudgeAccessibilityService : AccessibilityService() {
                     UsageEvent(packageName = packageName)
                 )
             }
+        }
+    }
+
+    /**
+     * The foreground clock says [packageName]'s daily budget has run out while the user is still
+     * sitting in it (v1.18.4). RE-EVALUATE, and let the ordinary block path do the rest.
+     *
+     * ## Why this re-evaluates instead of launching the overlay itself
+     * The clock's trigger is read off `CounterCacheRefresher`, which is a snapshot refreshed on a
+     * 10-second timer -- so "the budget is spent" is a belief that can be up to ten seconds stale,
+     * and acting on it directly is the [#50](https://github.com/astraedus/nudge/issues/50) shape:
+     * a user who has just RAISED their limit (or switched the rule off) would be blocked with the
+     * old one, from a timer, with nothing they did to trigger it. Asking
+     * `EvaluateBlockUseCase` re-derives the answer from the database, which also means the schedule
+     * window, the rule's enabled flag and the usage read are all the CURRENT ones.
+     *
+     * It also means there is exactly one enforcement path in this service: the reason the
+     * daily-limit block wrote no `UsageEvent` for two versions (`docs/BACKLOG.md`) was that it was a
+     * SECOND implementation of "block this app", and a second implementation is what drifts. The
+     * row, the `claimConfrontation` arrival invariant, grayscale and the launch gate now come from
+     * [handleDecision] for free.
+     *
+     * ## It may only ever ESCALATE to a HARD_BLOCK
+     * If the rules no longer say hard-block, this does nothing at all -- and in particular it must
+     * never act on a DELAY/HOLD/BREATHING answer. A budget that turns out NOT to be spent would
+     * otherwise put a countdown in front of someone who is already inside the app and has done
+     * nothing, which is a worse bug than the one this fixes. Same failure direction as the rest of
+     * the clock: when the evidence has gone stale, do nothing.
+     */
+    private suspend fun enforceExhaustedBudget(packageName: String) {
+        val decision = entryPoint.evaluateBlockUseCase().invoke(packageName)
+        if (decision !is BlockDecision.Block || decision.mode != BlockMode.HARD_BLOCK) {
+            entryPoint.nudgeLogger().i(
+                "daily limit NOT enforced package=$packageName " +
+                    "reason=rules_disagree decision=$decision"
+            )
+            return
+        }
+        handleDecision(decision, packageName)
+    }
+
+    /**
+     * Hide the awareness overlays the app now in front did NOT ask for.
+     *
+     * `clearOverlays` does this for an app with no cache entry at all; this is the same job for a
+     * TRACKED app that wants none of them, which nothing did. It was reachable before v1.18.4 only
+     * for a time-kick-only rule; a daily limit alone now puts a package in the cache, so walking
+     * from a counter app into one with a plain budget would otherwise leave the previous app's
+     * counter floating over it.
+     *
+     * Deliberately asks the entry what it WANTS rather than testing membership -- membership is the
+     * question that stopped answering this one.
+     */
+    private fun hideUnwantedAwarenessOverlays(packageName: String) {
+        try {
+            if (!counterCache.isCounterEnabled(packageName)) interactionHandler.hideCounter()
+            if (counterCache.getEntry(packageName)?.showTimeRemaining != true) {
+                timeRemainingHandler.hide()
+            }
+        } catch (e: Exception) {
+            entryPoint.nudgeLogger().w("awareness overlay hide failed package=$packageName", e)
         }
     }
 
@@ -2665,8 +2789,19 @@ class NudgeAccessibilityService : AccessibilityService() {
         val rules = entryPoint.blockRuleRepository().getEnabledRules().first()
         val appEntries = rules
             // A time-based auto-kick needs no counter and no overlay, so it must be able to put
-            // a package in the cache on its own — otherwise the hot path would never see it.
-            .filter { it.showCounter || it.showTimeRemaining || it.autoKickAfterMinutes != null }
+            // a package in the cache on its own — otherwise the hot path would never see it. A
+            // DAILY LIMIT is the same case and was missing: it needs no counter and no overlay
+            // either, but without an entry `updateForegroundTimeTicker` has nothing to read and
+            // the budget is only enforced on the next window-state event, i.e. on re-entry. The
+            // predicate is deliberately the union of "wants a drawn overlay" and
+            // `CounterCacheEntry.needsForegroundTimeTick`, so nothing that needs the clock can be
+            // filtered out before the clock is ever asked about it.
+            .filter {
+                it.showCounter ||
+                    it.showTimeRemaining ||
+                    it.autoKickAfterMinutes != null ||
+                    it.dailyLimitMinutes != null
+            }
             .mapNotNull { rule ->
                 rule.packageName?.let { pkg ->
                     pkg to CounterCacheEntry(
