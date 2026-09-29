@@ -195,3 +195,71 @@ tasks.withType<Test>().configureEach {
         systemProperty("nudge.leakprobe", it)
     }
 }
+
+/**
+ * The MERGED manifest's permission set is an allowlist, checked on every assemble/bundle.
+ *
+ * Nudge's listing promises no INTERNET permission, and the manifest we write is not the manifest
+ * that ships: every library contributes its own `<uses-permission>` at merge time, silently.
+ * (WorkManager already adds WAKE_LOCK and ACCESS_NETWORK_STATE; androidx.core adds its
+ * dynamic-receiver permission.) So a dependency bump could add INTERNET and no source file, review
+ * or JVM test would show it. This reads what actually ships and fails the build on anything not
+ * listed here.
+ *
+ * Adding a permission on purpose = adding it here, in the same diff, with the reason next to it.
+ */
+val allowedMergedPermissions = setOf(
+    "android.permission.PACKAGE_USAGE_STATS",
+    "android.permission.SYSTEM_ALERT_WINDOW",
+    "android.permission.FOREGROUND_SERVICE",
+    "android.permission.FOREGROUND_SERVICE_SPECIAL_USE",
+    "android.permission.POST_NOTIFICATIONS",
+    "android.permission.RECEIVE_BOOT_COMPLETED",
+    "android.permission.WRITE_SECURE_SETTINGS",
+    "android.permission.QUERY_ALL_PACKAGES",
+    "android.permission.CAMERA", // QR / barcode scanner, requested at runtime (ui/qr/)
+    "android.permission.WAKE_LOCK", // WorkManager
+    "android.permission.ACCESS_NETWORK_STATE", // WorkManager constraint tracking; not network access
+    "dev.astraedus.nudge.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" // androidx.core, app-private
+)
+
+abstract class VerifyMergedPermissionsTask : DefaultTask() {
+    @get:InputFile
+    abstract val mergedManifest: RegularFileProperty
+
+    @get:Input
+    abstract val allowed: SetProperty<String>
+
+    @get:OutputFile
+    abstract val report: RegularFileProperty
+
+    @TaskAction
+    fun verify() {
+        val text = mergedManifest.get().asFile.readText()
+        val declared = Regex("""<uses-permission(?:-sdk-23)?\b[^>]*?android:name="([^"]+)"""")
+            .findAll(text).map { it.groupValues[1] }.toSortedSet()
+        val unexpected = declared - allowed.get()
+        if (unexpected.isNotEmpty()) {
+            throw GradleException(
+                "Merged manifest declares permissions outside the allowlist: $unexpected. " +
+                    "Either the app manifest declares them or a library added them at merge time. Strip a library one with " +
+                    "<uses-permission android:name=\"...\" tools:node=\"remove\"/> in AndroidManifest.xml, " +
+                    "or, if it is intended, add it to allowedMergedPermissions in app/build.gradle.kts."
+            )
+        }
+        report.get().asFile.writeText(declared.joinToString("\n", postfix = "\n"))
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        val suffix = variant.name.replaceFirstChar { it.uppercase() }
+        val verify = tasks.register<VerifyMergedPermissionsTask>("verify${suffix}MergedPermissions") {
+            mergedManifest.set(variant.artifacts.get(com.android.build.api.artifact.SingleArtifact.MERGED_MANIFEST))
+            allowed.set(allowedMergedPermissions)
+            report.set(layout.buildDirectory.file("reports/merged-permissions/${variant.name}.txt"))
+        }
+        tasks.matching { it.name == "assemble$suffix" || it.name == "bundle$suffix" }
+            .configureEach { dependsOn(verify) }
+    }
+}
