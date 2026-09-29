@@ -4,6 +4,8 @@ All notable changes to Nudge are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [1.19.0] - 2026-09-30
+
 ### Added
 - **Nuke Mode.** A second list of apps, separate from your rules, that simply do not open while Nuke
   is on: no delay, no breathing, no daily 2-minute pass, and it overrides every rule and limit those
@@ -17,6 +19,15 @@ All notable changes to Nudge are documented here. Format follows [Keep a Changel
   launcher, keyboard, Settings and Nudge itself can never be nuked. Nuke state survives reboots and
   never leaves the phone in a backup; importing a backup cannot change it. Only a SHA-256 of the
   code is stored. Design and limits: `docs/architecture/nuke-mode.md`.
+- Reusable QR/barcode scanner and generator (`ui/qr/`, CameraX + zxing core, no Play services).
+  Adds the CAMERA permission, requested only when you scan; the camera is not required to install.
+  A build gate now fails any build whose merged manifest gains a permission not on the allowlist.
+
+### Changed
+- `scripts/device-qa.sh` refuses to swap the bench's signing key (debug vs release) unless
+  `ALLOW_CERT_SWITCH=1`, and says so in plain English instead of a raw adb error.
+
+## [1.18.4] - 2026-09-29
 
 ### Changed
 - `HomeViewModel`, `BackupViewModel`, `StatsViewModel` and `WillpowerViewModel` now take their
