@@ -14,6 +14,7 @@ import com.astraedus.nudge.domain.model.BlockMode
 import com.astraedus.nudge.domain.model.BlockRuleData
 import com.astraedus.nudge.domain.model.GroupMembership
 import com.astraedus.nudge.domain.model.WebBlockMode
+import com.astraedus.nudge.domain.nuke.NukeEnforcement
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -26,7 +27,12 @@ class EvaluateBlockUseCase @Inject constructor(
     private val ruleEvaluator: RuleEvaluator,
     private val scheduleEvaluator: ScheduleEvaluator,
     private val preferences: NudgePreferences,
-    private val contentFilter: ContentFilter
+    private val contentFilter: ContentFilter,
+    /**
+     * Nuke Mode. No default, on purpose: every construction site has to say what Nuke is, because a
+     * defaulted "never nuked" here is the silent no-op that would let every nuked app open.
+     */
+    private val nukeEnforcement: NukeEnforcement
 ) {
 
     /**
@@ -44,6 +50,19 @@ class EvaluateBlockUseCase @Inject constructor(
         detectedFeature: String? = null,
         includeWholeAppRulesForFeature: Boolean = true
     ): BlockDecision {
+        // NUKE FIRST, and before any rule or usage read: a nuked app's rules are irrelevant, so there
+        // is no reason to pay for them. Every app-level caller comes through here (the foreground
+        // event, the content-change fallback, in-app feature detection, the Reels tab cover, the
+        // daily-limit clock), so there is exactly one place Nuke joins evaluation.
+        if (nukeEnforcement.isNuked(packageName)) {
+            return blockEngine.evaluate(
+                packageName = packageName,
+                activeRules = emptyList(),
+                dailyUsageMs = 0L,
+                nuked = true
+            )
+        }
+
         val activeRules = resolveActiveRules(packageName)
         val dailyUsageMs = dailyUsageMs(packageName, activeRules)
 

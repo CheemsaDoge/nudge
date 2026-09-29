@@ -8,8 +8,11 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.astraedus.nudge.data.export.ExportedSettings
+import com.astraedus.nudge.domain.nuke.NukeKeyKind
+import com.astraedus.nudge.domain.nuke.NukeState
 import com.astraedus.nudge.service.GlobalEnabledProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -43,6 +46,14 @@ class NudgePreferences @Inject constructor(
         val PIP_ESCAPE_PROMPTED = stringPreferencesKey("pip_escape_prompted")
         val PROTECTION_DEGRADED = booleanPreferencesKey("protection_degraded")
         val PROTECTION_ALERT_SHOWN_AT = longPreferencesKey("protection_alert_shown_at")
+
+        // Nuke Mode (docs/architecture/nuke-mode.md). DEVICE-LOCAL, like the emergency-pass
+        // ledger: never exported, never importable (pinned by ImportedSettingsWriteContractTest).
+        val NUKE_ACTIVE = booleanPreferencesKey("nuke_active")
+        val NUKE_PACKAGES = stringSetPreferencesKey("nuke_packages")
+        val NUKE_KEY_HASH = stringPreferencesKey("nuke_key_hash")
+        val NUKE_KEY_KIND = stringPreferencesKey("nuke_key_kind")
+        val NUKE_INTRO_SEEN = booleanPreferencesKey("nuke_intro_seen")
     }
 
     /**
@@ -277,6 +288,79 @@ class NudgePreferences @Inject constructor(
             prefs[Keys.PROTECTION_DEGRADED] = degraded
             alertShownAtMs?.let { prefs[Keys.PROTECTION_ALERT_SHOWN_AT] = it }
         }
+    }
+
+    // --- Nuke Mode (see docs/architecture/nuke-mode.md) ---------------------------------------
+    //
+    // These are DUMB writes. Every gate (what weakens Nuke, what needs the key or the emergency
+    // code) lives in `NukePolicy` and is applied by the ViewModels before they get here, the same
+    // split Strict Mode uses. The ONE invariant enforced here is the one no caller may break:
+    // Nuke is never on without a key, because a key is one of its only two ways out.
+
+    /**
+     * The whole persisted Nuke state as one value. `distinctUntilChanged` for the reason
+     * [isGlobalEnabled] documents: the accessibility service collects this, and DataStore re-emits
+     * every snapshot on every write to ANY key.
+     */
+    val nukeState: Flow<NukeState> = context.dataStore.data
+        .map { prefs ->
+            val hash = prefs[Keys.NUKE_KEY_HASH]?.takeIf { it.isNotBlank() }
+            NukeState(
+                active = (prefs[Keys.NUKE_ACTIVE] ?: false) && hash != null,
+                packages = prefs[Keys.NUKE_PACKAGES] ?: emptySet(),
+                keyHash = hash,
+                keyKind = NukeKeyKind.fromNameOrNull(prefs[Keys.NUKE_KEY_KIND])
+            )
+        }
+        .distinctUntilChanged()
+
+    /** Turn Nuke on or off. Refuses to turn it ON with no key paired (it stays off). */
+    suspend fun setNukeActive(active: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.NUKE_ACTIVE] = active && !prefs[Keys.NUKE_KEY_HASH].isNullOrBlank()
+        }
+    }
+
+    /** Add [packages] to the Nuke list. Read-modify-write under one `edit`. */
+    suspend fun addNukePackages(packages: Collection<String>) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.NUKE_PACKAGES] = (prefs[Keys.NUKE_PACKAGES] ?: emptySet()) +
+                packages.filter { it.isNotBlank() }
+        }
+    }
+
+    /** Remove [packages] from the Nuke list. Read-modify-write under one `edit`. */
+    suspend fun removeNukePackages(packages: Collection<String>) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.NUKE_PACKAGES] = (prefs[Keys.NUKE_PACKAGES] ?: emptySet()) - packages.toSet()
+        }
+    }
+
+    /** Pair a key: only its hash is stored, never the payload. */
+    suspend fun setNukeKey(keyHash: String, kind: NukeKeyKind) {
+        require(keyHash.isNotBlank()) { "a Nuke key hash must not be blank" }
+        context.dataStore.edit { prefs ->
+            prefs[Keys.NUKE_KEY_HASH] = keyHash
+            prefs[Keys.NUKE_KEY_KIND] = kind.name
+        }
+    }
+
+    /** Unpair the key. Also turns Nuke OFF, in the same transaction: no key, no Nuke. */
+    suspend fun clearNukeKey() {
+        context.dataStore.edit { prefs ->
+            prefs.remove(Keys.NUKE_KEY_HASH)
+            prefs.remove(Keys.NUKE_KEY_KIND)
+            prefs[Keys.NUKE_ACTIVE] = false
+        }
+    }
+
+    /** Whether the one-time Nuke explainer has been shown. */
+    val nukeIntroSeen: Flow<Boolean> = context.dataStore.data
+        .map { prefs -> prefs[Keys.NUKE_INTRO_SEEN] ?: false }
+        .distinctUntilChanged()
+
+    suspend fun setNukeIntroSeen() {
+        context.dataStore.edit { prefs -> prefs[Keys.NUKE_INTRO_SEEN] = true }
     }
 
     // --- Backup: the settings an export file carries (see [ExportedSettings]) ---------------
