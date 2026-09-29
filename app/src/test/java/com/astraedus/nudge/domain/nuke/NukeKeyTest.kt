@@ -80,6 +80,15 @@ class NukeKeyTest {
     }
 
     @Test
+    fun `an over-long scan is never a key`() {
+        val atCap = "x".repeat(NukeKey.MAX_PAYLOAD_LENGTH)
+        val overCap = "x".repeat(NukeKey.MAX_PAYLOAD_LENGTH + 1)
+        assertTrue(NukeKey.hashOrNull(atCap) != null)
+        assertNull(NukeKey.hashOrNull(overCap))
+        assertFalse(NukeKey.matches(overCap, NukeKey.hashOrNull(atCap)))
+    }
+
+    @Test
     fun `the right key matches`() {
         val token = NukeKey.generateToken()
         assertTrue(NukeKey.matches(token, NukeKey.hashOrNull(token)))

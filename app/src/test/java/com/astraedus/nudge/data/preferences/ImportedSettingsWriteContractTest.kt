@@ -94,7 +94,14 @@ class ImportedSettingsWriteContractTest {
             "EMERGENCY_PASS_USAGE",
             "PIP_ESCAPE_PROMPTED",
             "DEBUG_LOGGING_ENABLED",
-            "GLOBAL_ENABLED"
+            "GLOBAL_ENABLED",
+            // Nuke Mode: an import is the one write path that bypasses every screen, so it must
+            // never be able to end Nuke, swap its key or change its list (docs/architecture/nuke-mode.md).
+            "NUKE_ACTIVE",
+            "NUKE_PACKAGES",
+            "NUKE_KEY_HASH",
+            "NUKE_KEY_KIND",
+            "NUKE_INTRO_SEEN"
         ).forEach { key ->
             assertTrue(
                 "$key must not be restorable from a backup file",

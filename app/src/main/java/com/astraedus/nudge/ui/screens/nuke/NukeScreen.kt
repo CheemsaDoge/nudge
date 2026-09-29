@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.astraedus.nudge.ui.components.AppListItem
 import com.astraedus.nudge.ui.nuke.NukeUnlockHost
+import com.astraedus.nudge.ui.nuke.hasAnyCamera
 import com.astraedus.nudge.ui.qr.QrCodeGenerator
 import com.astraedus.nudge.ui.qr.QrShare
 import com.astraedus.nudge.ui.qr.ScanQrContract
@@ -64,6 +65,8 @@ fun NukeScreen(
     val unlock by viewModel.unlock.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    val hasCamera = remember { hasAnyCamera(context) }
 
     var pendingPurpose by rememberSaveable { mutableStateOf<NukeScanPurpose?>(null) }
     val scanner = rememberLauncherForActivityResult(ScanQrContract()) { payload ->
@@ -127,6 +130,7 @@ fun NukeScreen(
             item {
                 NukeStatusCard(
                     state = state,
+                    hasCamera = hasCamera,
                     onScanToggle = { viewModel.requestScan(NukeScanPurpose.TOGGLE) },
                     onNukeNow = viewModel::nukeNow,
                     onEmergencyEnd = viewModel::endWithEmergencyCode
@@ -136,6 +140,7 @@ fun NukeScreen(
             item {
                 NukeKeyCard(
                     state = state,
+                    hasCamera = hasCamera,
                     onCreateQr = viewModel::startCreateQr,
                     onPairExisting = viewModel::startPairExisting,
                     onUnpair = viewModel::unpair
@@ -200,7 +205,6 @@ fun NukeScreen(
 
     val currentPairing = pairing
     if (currentPairing is NukePairing.ShowingNewQr) {
-        val context = LocalContext.current
         NukePairingDialog(
             token = currentPairing.token,
             onSaveShare = {

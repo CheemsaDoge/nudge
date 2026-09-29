@@ -29,6 +29,13 @@ object NukeKey {
     /** Random bytes in a generated token: 256 bits. */
     const val TOKEN_RANDOM_BYTES = 32
 
+    /**
+     * Longest scanned payload accepted as a key. A scan is UNTRUSTED text (any QR in the house, up
+     * to ~4KB from the scanner); anything longer is refused rather than hashed, so a hostile or
+     * corrupt code cannot become a key nobody can reproduce.
+     */
+    const val MAX_PAYLOAD_LENGTH = 4096
+
     private val secureRandom: SecureRandom by lazy { SecureRandom() }
 
     /**
@@ -55,11 +62,12 @@ object NukeKey {
 
     /**
      * Lowercase hex SHA-256 of [normalize]d [payload], or null for a blank payload (a blank scan is
-     * never a key: pairing it would make an empty camera frame the thing that ends Nuke).
+     * never a key: pairing it would make an empty camera frame the thing that ends Nuke) or one
+     * longer than [MAX_PAYLOAD_LENGTH]. The payload itself is never logged or stored anywhere.
      */
     fun hashOrNull(payload: String?): String? {
         val normalized = payload?.let(::normalize)
-        if (normalized.isNullOrEmpty()) return null
+        if (normalized.isNullOrEmpty() || normalized.length > MAX_PAYLOAD_LENGTH) return null
         val digest = MessageDigest.getInstance("SHA-256")
             .digest(normalized.toByteArray(Charsets.UTF_8))
         return digest.joinToString("") { "%02x".format(it) }

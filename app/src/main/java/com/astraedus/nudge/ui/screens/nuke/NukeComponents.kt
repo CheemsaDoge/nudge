@@ -76,6 +76,7 @@ fun NukeIntroCard(onDismiss: () -> Unit) {
 @Composable
 fun NukeStatusCard(
     state: NukeUiState,
+    hasCamera: Boolean,
     onScanToggle: () -> Unit,
     onNukeNow: () -> Unit,
     onEmergencyEnd: () -> Unit
@@ -108,6 +109,7 @@ fun NukeStatusCard(
             if (state.active) {
                 Button(
                     onClick = onScanToggle,
+                    enabled = hasCamera,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Outlined.QrCodeScanner, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -127,7 +129,7 @@ fun NukeStatusCard(
             } else {
                 Button(
                     onClick = onScanToggle,
-                    enabled = state.hasKey,
+                    enabled = state.hasKey && hasCamera,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Outlined.QrCodeScanner, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -166,6 +168,7 @@ fun NukeStatusCard(
 @Composable
 fun NukeKeyCard(
     state: NukeUiState,
+    hasCamera: Boolean,
     onCreateQr: () -> Unit,
     onPairExisting: () -> Unit,
     onUnpair: () -> Unit
@@ -183,6 +186,16 @@ fun NukeKeyCard(
             )
             Spacer(Modifier.height(8.dp))
 
+            if (!hasCamera) {
+                // The scanner returns nothing on a phone without a camera, so pairing could only
+                // ever silently fail. Say so instead. An already-paired phone keeps the emergency
+                // code as its way out (the unlock dialog says the same).
+                Text(
+                    "Pairing a Nuke code needs a camera, and this phone doesn't have one.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             if (!state.hasKey) {
                 Text(
                     "Pair a code first. Stick it somewhere inconvenient: the other side of the house, your car, a friend.",
@@ -190,11 +203,11 @@ fun NukeKeyCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(12.dp))
-                Button(onClick = onCreateQr, modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = onCreateQr, enabled = hasCamera, modifier = Modifier.fillMaxWidth()) {
                     Text("Create a Nuke QR")
                 }
                 Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = onPairExisting, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = onPairExisting, enabled = hasCamera, modifier = Modifier.fillMaxWidth()) {
                     Text("Use a barcode I already have")
                 }
                 Spacer(Modifier.height(4.dp))
@@ -223,10 +236,10 @@ fun NukeKeyCard(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    OutlinedButton(onClick = onCreateQr, modifier = Modifier.weight(1f)) {
+                    OutlinedButton(onClick = onCreateQr, enabled = hasCamera, modifier = Modifier.weight(1f)) {
                         Text("New QR")
                     }
-                    OutlinedButton(onClick = onPairExisting, modifier = Modifier.weight(1f)) {
+                    OutlinedButton(onClick = onPairExisting, enabled = hasCamera, modifier = Modifier.weight(1f)) {
                         Text("Own barcode")
                     }
                 }
@@ -291,7 +304,7 @@ fun NukePairingDialog(
                 }
                 Spacer(Modifier.height(8.dp))
                 Button(onClick = onConfirmScan, modifier = Modifier.fillMaxWidth()) {
-                    Text("I've put it somewhere — scan to confirm")
+                    Text("I've saved it. Scan to confirm")
                 }
                 Spacer(Modifier.height(4.dp))
                 TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
