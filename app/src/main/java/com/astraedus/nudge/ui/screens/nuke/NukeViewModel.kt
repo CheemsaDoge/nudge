@@ -81,7 +81,10 @@ sealed interface NukePairing {
      *
      * The token lives only here, in memory, for the life of this screen. It is never persisted.
      */
-    data class ShowingNewQr(val token: String) : NukePairing
+    data class ShowingNewQr(val token: String) : NukePairing {
+        /** Never print the key: a stray log line of this state would be a copy of the way out. */
+        override fun toString(): String = "ShowingNewQr(token=<redacted>)"
+    }
 }
 
 /**
