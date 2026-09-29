@@ -97,6 +97,16 @@ class BarcodeFrameDecoderTest {
     }
 
     @Test
+    fun `one decoder handles a change of frame size between sideways reads`() {
+        val code = QrTestFrames.render("4006381333931", BarcodeFormat.EAN_13, 400, 120)
+        val big = QrTestFrames.frameWith(code, sideways = true)
+        val small = QrTestFrames.frameWith(code, frameWidth = 640, frameHeight = 480, left = 40, top = 20, sideways = true)
+        assertEquals("4006381333931", decoder.decode(big, 1280, 720, 90)?.text)
+        assertEquals("4006381333931", decoder.decode(small, 640, 480, 90)?.text)
+        assertEquals("4006381333931", decoder.decode(big, 1280, 720, 90)?.text)
+    }
+
+    @Test
     fun `a row-padded camera plane decodes once packed`() {
         val width = 1280
         val height = 720

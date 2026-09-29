@@ -42,6 +42,14 @@ class LuminanceFramesTest {
     }
 
     @Test
+    fun `rotate90 into a reused buffer overwrites every byte of it`() {
+        val out = ByteArray(6) { 99 }
+        val result = LuminanceFrames.rotate90(bytes(1, 2, 3, 4, 5, 6), 3, 2, out)
+        assertSame(out, result)
+        assertArrayEquals(bytes(4, 1, 5, 2, 6, 3), out)
+    }
+
+    @Test
     fun `four quarter turns are the identity on a non-square frame`() {
         val w = 7
         val h = 4

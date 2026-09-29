@@ -31,6 +31,8 @@ internal class BarcodeFrameDecoder {
         )
     }
 
+    private var rotated = ByteArray(0)
+
     /**
      * Decodes a packed [width] x [height] luminance frame. [rotationDegrees] is how far the frame
      * must turn clockwise to be upright as the user sees it (CameraX's `rotationDegrees`); it only
@@ -42,7 +44,12 @@ internal class BarcodeFrameDecoder {
      */
     fun decode(frame: ByteArray, width: Int, height: Int, rotationDegrees: Int = 0): DecodedCode? {
         val asIs = { decodeOrientation(frame, width, height) }
-        val turned = { decodeOrientation(LuminanceFrames.rotate90(frame, width, height), height, width) }
+        val turned = {
+            // Reused across frames: at ~1 MB a frame and several frames a second, a fresh array
+            // per miss is steady garbage for the whole time the scanner is open.
+            if (rotated.size != width * height) rotated = ByteArray(width * height)
+            decodeOrientation(LuminanceFrames.rotate90(frame, width, height, rotated), height, width)
+        }
         return if (rotationDegrees % 180 == 0) asIs() ?: turned() else turned() ?: asIs()
     }
 

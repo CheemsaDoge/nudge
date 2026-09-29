@@ -50,11 +50,15 @@ internal object LuminanceFrames {
      * in the raw frame as vertical bars that no row crosses. zxing can rotate for itself, but only
      * a luminance source that supports rotation, and `PlanarYUVLuminanceSource` does not.
      */
-    fun rotate90(frame: ByteArray, width: Int, height: Int): ByteArray {
-        require(frame.size >= width * height) {
-            "frame holds ${frame.size} bytes, needs ${width * height} for ${width}x$height"
+    fun rotate90(
+        frame: ByteArray,
+        width: Int,
+        height: Int,
+        out: ByteArray = ByteArray(width * height)
+    ): ByteArray {
+        require(frame.size >= width * height && out.size >= width * height) {
+            "frame (${frame.size}) and out (${out.size}) need ${width * height} bytes for ${width}x$height"
         }
-        val out = ByteArray(width * height)
         for (y in 0 until height) {
             val srcRow = y * width
             val dstX = height - 1 - y

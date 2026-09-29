@@ -139,8 +139,9 @@ dependencies {
     //  - CameraX (Apache-2.0, AOSP Jetpack, no Play services): Camera2 under a lifecycle-bound API,
     //    torch control, and PreviewView. Chosen over zxing-android-embedded, which drives the
     //    deprecated Camera1 API, ships its own View-based landscape capture activity and is in
-    //    maintenance mode. 1.5.3 is built against kotlin-stdlib 2.0.21, this project's Kotlin.
-    implementation("com.google.zxing:core:3.5.3")
+    //    maintenance mode. 1.5.3 is built against kotlin-stdlib 2.0.21, this project's Kotlin;
+    //    1.6.x pulls kotlin-stdlib 2.1.20, so it waits for the Kotlin bump.
+    implementation("com.google.zxing:core:3.5.4")
     implementation("androidx.camera:camera-camera2:1.5.3")
     implementation("androidx.camera:camera-lifecycle:1.5.3")
     implementation("androidx.camera:camera-view:1.5.3")
