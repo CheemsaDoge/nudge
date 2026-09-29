@@ -132,6 +132,20 @@ dependencies {
     implementation("androidx.glance:glance-appwidget:1.2.0")
     implementation("androidx.glance:glance-material3:1.2.0")
 
+    // QR / barcode scanning and generation (ui/qr/, docs/architecture/qr.md). FOSS only: Nudge
+    // ships on F-Droid and IzzyOnDroid, so ML Kit and the Play-services code scanner are out.
+    //  - zxing core (Apache-2.0): pure-Java encode + decode. The decode runs in OUR code over the
+    //    camera's luminance plane, which is what makes it JVM-testable.
+    //  - CameraX (Apache-2.0, AOSP Jetpack, no Play services): Camera2 under a lifecycle-bound API,
+    //    torch control, and PreviewView. Chosen over zxing-android-embedded, which drives the
+    //    deprecated Camera1 API, ships its own View-based landscape capture activity and is in
+    //    maintenance mode. 1.5.3 is built against kotlin-stdlib 2.0.21, this project's Kotlin;
+    //    1.6.x pulls kotlin-stdlib 2.1.20, so it waits for the Kotlin bump.
+    implementation("com.google.zxing:core:3.5.4")
+    implementation("androidx.camera:camera-camera2:1.5.3")
+    implementation("androidx.camera:camera-lifecycle:1.5.3")
+    implementation("androidx.camera:camera-view:1.5.3")
+
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
@@ -180,5 +194,73 @@ tasks.withType<Test>().configureEach {
     }
     providers.systemProperty("nudge.leakprobe").orNull?.let {
         systemProperty("nudge.leakprobe", it)
+    }
+}
+
+/**
+ * The MERGED manifest's permission set is an allowlist, checked on every assemble/bundle.
+ *
+ * Nudge's listing promises no INTERNET permission, and the manifest we write is not the manifest
+ * that ships: every library contributes its own `<uses-permission>` at merge time, silently.
+ * (WorkManager already adds WAKE_LOCK and ACCESS_NETWORK_STATE; androidx.core adds its
+ * dynamic-receiver permission.) So a dependency bump could add INTERNET and no source file, review
+ * or JVM test would show it. This reads what actually ships and fails the build on anything not
+ * listed here.
+ *
+ * Adding a permission on purpose = adding it here, in the same diff, with the reason next to it.
+ */
+val allowedMergedPermissions = setOf(
+    "android.permission.PACKAGE_USAGE_STATS",
+    "android.permission.SYSTEM_ALERT_WINDOW",
+    "android.permission.FOREGROUND_SERVICE",
+    "android.permission.FOREGROUND_SERVICE_SPECIAL_USE",
+    "android.permission.POST_NOTIFICATIONS",
+    "android.permission.RECEIVE_BOOT_COMPLETED",
+    "android.permission.WRITE_SECURE_SETTINGS",
+    "android.permission.QUERY_ALL_PACKAGES",
+    "android.permission.CAMERA", // QR / barcode scanner, requested at runtime (ui/qr/)
+    "android.permission.WAKE_LOCK", // WorkManager
+    "android.permission.ACCESS_NETWORK_STATE", // WorkManager constraint tracking; not network access
+    "dev.astraedus.nudge.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" // androidx.core, app-private
+)
+
+abstract class VerifyMergedPermissionsTask : DefaultTask() {
+    @get:InputFile
+    abstract val mergedManifest: RegularFileProperty
+
+    @get:Input
+    abstract val allowed: SetProperty<String>
+
+    @get:OutputFile
+    abstract val report: RegularFileProperty
+
+    @TaskAction
+    fun verify() {
+        val text = mergedManifest.get().asFile.readText()
+        val declared = Regex("""<uses-permission(?:-sdk-23)?\b[^>]*?android:name="([^"]+)"""")
+            .findAll(text).map { it.groupValues[1] }.toSortedSet()
+        val unexpected = declared - allowed.get()
+        if (unexpected.isNotEmpty()) {
+            throw GradleException(
+                "Merged manifest declares permissions outside the allowlist: $unexpected. " +
+                    "Either the app manifest declares them or a library added them at merge time. Strip a library one with " +
+                    "<uses-permission android:name=\"...\" tools:node=\"remove\"/> in AndroidManifest.xml, " +
+                    "or, if it is intended, add it to allowedMergedPermissions in app/build.gradle.kts."
+            )
+        }
+        report.get().asFile.writeText(declared.joinToString("\n", postfix = "\n"))
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        val suffix = variant.name.replaceFirstChar { it.uppercase() }
+        val verify = tasks.register<VerifyMergedPermissionsTask>("verify${suffix}MergedPermissions") {
+            mergedManifest.set(variant.artifacts.get(com.android.build.api.artifact.SingleArtifact.MERGED_MANIFEST))
+            allowed.set(allowedMergedPermissions)
+            report.set(layout.buildDirectory.file("reports/merged-permissions/${variant.name}.txt"))
+        }
+        tasks.matching { it.name == "assemble$suffix" || it.name == "bundle$suffix" }
+            .configureEach { dependsOn(verify) }
     }
 }

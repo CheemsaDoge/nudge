@@ -25,6 +25,14 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
 
+    <!-- QR / barcode scanning (ui/qr/, docs/architecture/qr.md). Requested at runtime only when the
+         scanner opens. The feature is NOT required: a camera-less device must still install
+         Nudge, it just cannot scan (the scan contract returns null on such a device). -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature
+        android:name="android.hardware.camera.any"
+        android:required="false" />
+
         <!-- Backup is OFF, deliberately, for two independent reasons.
 
              1. PRIVACY. Nudge holds no INTERNET permission and its listing promises "all data
@@ -99,6 +107,18 @@
             android:launchMode="singleInstance"
             android:taskAffinity=""
             android:theme="@style/Theme.Nudge.Overlay" />
+
+        <!-- Camera scanner behind ScanQrContract. Not exported: only Nudge opens it. Dark
+             framework theme so the window does not flash white before the preview starts.
+             Portrait so a phone turning mid-scan does not recreate the activity and rebind the
+             camera. Android 16 ignores the lock on large screens, which is fine: the layout is
+             size-driven and CameraX handles rotation, hence the two lint suppressions. -->
+        <activity
+            android:name=".ui.qr.QrScanActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@android:style/Theme.Material.NoActionBar"
+            tools:ignore="DiscouragedApi,LockedOrientationActivity" />
 
         <service
             android:name=".service.NudgeAccessibilityService"
