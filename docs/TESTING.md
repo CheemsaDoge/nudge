@@ -98,7 +98,16 @@ scripts/device-qa.sh all          # the gate; nonzero exit on any FAIL
 scripts/device-qa.sh delay-block  # one case, while iterating
 scripts/device-qa.sh list
 APK=installed scripts/device-qa.sh all   # validate the build already on the bench
+APK=main ALLOW_CERT_SWITCH=1 scripts/device-qa.sh setup   # put the release key back on the bench
 ```
+
+**The bench carries the RELEASE signing key.** Before installing, the script compares the installed
+APK's signer with the incoming one (`scripts/cert-guard.sh`) and refuses, touching nothing, if they
+differ: Android cannot update across keys, so the only way through is an uninstall that wipes the
+bench, and a silent `APK=debug` switch on 2026-09-29 broke every later CI install for the next lane.
+`ALLOW_CERT_SWITCH=1` opts in (uninstall, install, loud "bench state was wiped"); a run that leaves
+a debug build installed prints the restore command on exit. Tests: `scripts/test-cert-guard.sh`
+(device-free, shimmed `adb`/`apksigner`, runs in CI).
 
 It resolves the ADB serial, takes the shared Pixel lock, installs the APK under test
 (`APK=main` | `release` | `installed` | `debug` | a path), verifies the `versionCode`, applies

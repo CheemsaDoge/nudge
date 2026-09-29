@@ -34,13 +34,24 @@
 #   APK=installed  install nothing; drive whatever build is already on the device.
 #                  This is the RELEASE-GATE mode: it validates the exact artefact a
 #                  human/CI put on the bench.
-#   APK=debug      build + install `assembleDebug` locally. Debug is signed with debug
-#                  keys, so this UNINSTALLS the release build first (data is wiped by
-#                  `setup` anyway). The ONLY mode in which the `refusal-alert` case can
+#   APK=debug      build + install `assembleDebug` locally. Debug is signed with the DEBUG
+#                  key, so over the bench's release build it needs ALLOW_CERT_SWITCH=1
+#                  (below), and it leaves the bench unable to take any CI/release APK until
+#                  switched back. The ONLY mode in which the `refusal-alert` case can
 #                  run: its trigger receiver lives in `app/src/debug/` and does not
 #                  exist in a release APK at all (see
 #                  docs/architecture/service-lifecycle-and-watchdog.md).
 #   APK=/path/to/app.apk  install that file.
+#
+# ── Signing key: the bench carries the RELEASE key (scripts/cert-guard.sh) ─────
+#   Before installing, the installed APK's signer is compared with the incoming one. If they
+#   differ the run REFUSES and changes nothing: Android cannot update across keys, so the only
+#   way through is an uninstall that wipes the bench (2026-09-29: a silent APK=debug switch
+#   broke every later CI install for the next lane).
+#   ALLOW_CERT_SWITCH=1            opt in: uninstall, install, and say loudly that bench state
+#                                  was wiped. Deliberate switch, and the way back:
+#                                    APK=debug ALLOW_CERT_SWITCH=1 scripts/device-qa.sh refusal-alert
+#                                    APK=main  ALLOW_CERT_SWITCH=1 scripts/device-qa.sh setup
 #
 # ── Other knobs ───────────────────────────────────────────────────────────────
 #   ADB_SERIAL=192.168.1.68:5555   bench Pixel 3 (auto-reconnects)
@@ -84,6 +95,9 @@ LIMIT_PKG="com.google.android.calculator"
 
 ADB_SERIAL="${ADB_SERIAL:-192.168.1.68:5555}"
 APK="${APK:-main}"
+ALLOW_CERT_SWITCH="${ALLOW_CERT_SWITCH:-0}"
+# shellcheck source=scripts/cert-guard.sh
+. "${REPO_ROOT}/scripts/cert-guard.sh"
 NOTIF_IDLE_SECS="${NOTIF_IDLE_SECS:-300}"
 HOME_REOPEN_TRIALS="${HOME_REOPEN_TRIALS:-5}"
 # Real foreground time spent in Calculator to exhaust its 1-minute budget. 70s, not 60: the
@@ -190,6 +204,7 @@ cleanup() {
     "${HOME}/bin/device-lock.sh" release pixel --owner "$LOCK_OWNER" >/dev/null 2>&1 &&
       info "Device lock released."
   fi
+  [[ "${LEFT_DEBUG_ON_BENCH:-0}" -eq 1 ]] && debug_left_on_bench_message >&2
   exit "$code"
 }
 trap cleanup EXIT INT TERM
@@ -449,13 +464,19 @@ install_apk() {
       do_install "$(find "$WORK" -maxdepth 1 -name '*.apk' | head -1)"
       ;;
     debug)
+      # Refuse BEFORE a multi-minute gradle build when the answer is already known: the bench
+      # carries a non-debug key and nobody opted in. The full signer comparison still runs in
+      # do_install (two debug keys from different machines are also incompatible).
+      read_installed_cert
+      if [[ "$ALLOW_CERT_SWITCH" != "1" && -n "$INSTALLED_CERT_DN" ]] &&
+         ! signer_is_debug "$INSTALLED_CERT_DN"; then
+        fail "$(cert_refusal_message "$(signer_label "$INSTALLED_CERT_DN")" \
+          "the DEBUG key (CN=Android Debug), from assembleDebug" "$(rerun_cmd)")"
+        exit 2
+      fi
       info "Building assembleDebug locally …"
       ( cd "$REPO_ROOT" && ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}" \
         ./gradlew --quiet assembleDebug ) || die "assembleDebug failed"
-      # Debug is signed with debug keys; an in-place update over the release build is
-      # refused with INSTALL_FAILED_UPDATE_INCOMPATIBLE. `setup` wipes data anyway.
-      warn "uninstalling the release build so the debug-signed APK can install"
-      ash pm uninstall "$APP_ID" >/dev/null 2>&1 || true
       do_install "${REPO_ROOT}/app/build/outputs/apk/debug/app-debug.apk"
       ;;
     *)
@@ -476,19 +497,81 @@ install_apk() {
   fi
 }
 
+# ─── Signing-key guard (logic + messages in scripts/cert-guard.sh) ─────────────
+# The installed signer, read once per run: pulling base.apk is a ~20MB copy over Wi-Fi, and
+# both the APK=debug early refusal and do_install need it. Reset after every install.
+INSTALLED_CERT_READ=0
+INSTALLED_CERT_SHA=""   # digest · "none" = not installed · "" = installed but unreadable
+INSTALLED_CERT_DN=""
+# Set once a debug-signed APK is on the bench, so the EXIT trap can say how to put it back,
+# on every exit path (a FAILing run leaves the debug build there just the same).
+LEFT_DEBUG_ON_BENCH=0
+
+rerun_cmd() { printf 'APK=%s scripts/device-qa.sh %s' "$APK" "${QA_TARGET:-all}"; }
+
+read_installed_cert() {
+  [[ "$INSTALLED_CERT_READ" -eq 1 ]] && return 0
+  local pulled="${WORK}/installed-base.apk" rc=0
+  rm -f "$pulled"
+  pull_installed_apk "$ADB_SERIAL" "$APP_ID" "$pulled" || rc=$?
+  case $rc in
+    0) INSTALLED_CERT_SHA="$(apk_signer_sha256 "$pulled")"
+       INSTALLED_CERT_DN="$(apk_signer_dn "$pulled")" ;;
+    1) INSTALLED_CERT_SHA="none"; INSTALLED_CERT_DN="" ;;
+    *) INSTALLED_CERT_SHA=""; INSTALLED_CERT_DN=""
+       warn "could not pull the installed APK to read its signer" ;;
+  esac
+  INSTALLED_CERT_READ=1
+}
+
+# preflight_cert <apk>, compare signers, then refuse, or (opted in) uninstall loudly.
+preflight_cert() {
+  local apk="$1" incoming_sha incoming_dn decision from to
+  read_installed_cert
+  incoming_sha="$(apk_signer_sha256 "$apk")"
+  incoming_dn="$(apk_signer_dn "$apk")"
+  decision="$(cert_decision "$INSTALLED_CERT_SHA" "$incoming_sha" "$ALLOW_CERT_SWITCH")"
+  from="$(signer_label "$INSTALLED_CERT_DN")"
+  to="$(signer_label "$incoming_dn")"
+  case "$decision" in
+    fresh|same) info "Signing key: ${decision} (${to})" ;;
+    unknown) warn "could not compare signing keys (is apksigner on PATH?); relying on adb's own check" ;;
+    refuse) fail "$(cert_refusal_message "$from" "$to" "$(rerun_cmd)")"; exit 2 ;;
+    switch)
+      cert_switch_banner "$from" "$to" >&2
+      ash pm uninstall "$APP_ID" >/dev/null 2>&1 || true
+      ;;
+  esac
+}
+
 do_install() {
   local apk="$1"
   [[ -f "$apk" ]] || die "APK not found: $apk"
+  preflight_cert "$apk"
   info "Installing $(basename "$apk") …"
   local out
   out="$(adbs install -r -d "$apk" 2>&1)"
-  if ! grep -q 'Success' <<<"$out"; then
-    warn "install -r failed: ${out}"
-    warn "retrying after uninstall (signature or downgrade mismatch)"
+  if [[ "$out" == *INSTALL_FAILED_UPDATE_INCOMPATIBLE* ]]; then
+    # The preflight could not read a signer (or the device disagrees with it). Same opt-in:
+    # never uninstall across keys unless asked to.
+    if [[ "$ALLOW_CERT_SWITCH" != "1" ]]; then
+      fail "$(update_incompatible_message)"
+      exit 2
+    fi
+    cert_switch_banner "the installed build's key" "$(signer_label "$(apk_signer_dn "$apk")")" >&2
     ash pm uninstall "$APP_ID" >/dev/null 2>&1 || true
     out="$(adbs install "$apk" 2>&1)"
-    grep -q 'Success' <<<"$out" || die "install failed: ${out}"
+  elif ! grep -q 'Success' <<<"$out"; then
+    # Same key, so not a key switch (e.g. INSTALL_FAILED_VERSION_DOWNGRADE on a
+    # non-debuggable build). Uninstalling still wipes bench state, so say so.
+    warn "install -r failed: ${out}"
+    warn "retrying after uninstall (same signing key), this WIPES the bench's Nudge state"
+    ash pm uninstall "$APP_ID" >/dev/null 2>&1 || true
+    out="$(adbs install "$apk" 2>&1)"
   fi
+  grep -q 'Success' <<<"$out" || die "install failed: ${out}"
+  INSTALLED_CERT_READ=0
+  if signer_is_debug "$(apk_signer_dn "$apk")"; then LEFT_DEBUG_ON_BENCH=1; else LEFT_DEBUG_ON_BENCH=0; fi
   # `install -r` leaves the OLD code running in the current process; force-stop so the
   # next launch is unambiguously the build we just pushed.
   ash am force-stop "$APP_ID" >/dev/null 2>&1
@@ -1828,6 +1911,7 @@ usage() {
 
 main() {
   local target="${1:-all}"
+  QA_TARGET="$target"
   case "$target" in
     -h|--help|help) usage; exit 0 ;;
     list) printf '%s\n' "${ALL_CASES[@]}"; exit 0 ;;
@@ -1872,4 +1956,9 @@ main() {
   exit 0
 }
 
-main "$@"
+# Sourceable, so scripts/test-cert-guard.sh can drive the install path (do_install, the APK=debug
+# refusal, the exit-trap reminder) against a PATH-shimmed adb without a device. Run directly, it
+# behaves exactly as before.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

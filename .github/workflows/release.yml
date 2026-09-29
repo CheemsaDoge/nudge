@@ -43,6 +43,11 @@ jobs:
           scripts/test-store-notes.sh   # the validator itself still rejects every markup class
           scripts/check-store-notes.sh  # …and this release's notes pass it
 
+      # The bench signing-key guard in scripts/device-qa.sh (2026-09-29: a silent APK=debug
+      # install locked every CI APK out of the bench). Shimmed adb/apksigner, no toolchain, ~2s.
+      - name: Test device-QA signing-key guard
+        run: scripts/test-cert-guard.sh
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
