@@ -77,7 +77,10 @@ fun ChallengeDialog(
     target: String,
     prompt: String,
     onUnlock: (String) -> Unit,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    /** Nuke Mode reuses this dialog for its 64-character emergency code under its own title. */
+    title: String = "Strict Mode locked",
+    confirmLabel: String = "Unlock"
 ) {
     val focusManager = LocalFocusManager.current
     var input by remember(target) { mutableStateOf("") }
@@ -91,7 +94,7 @@ fun ChallengeDialog(
     AlertDialog(
         onDismissRequest = onCancel,
         icon = { Icon(Icons.Outlined.Lock, contentDescription = null) },
-        title = { Text("Strict Mode locked") },
+        title = { Text(title) },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState())
@@ -168,7 +171,7 @@ fun ChallengeDialog(
                 onClick = { onUnlock(input) },
                 enabled = matches
             ) {
-                Text("Unlock")
+                Text(confirmLabel)
             }
         },
         dismissButton = {
