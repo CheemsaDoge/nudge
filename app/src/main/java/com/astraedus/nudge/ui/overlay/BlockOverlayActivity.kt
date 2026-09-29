@@ -84,6 +84,13 @@ class BlockOverlayActivity : ComponentActivity() {
          * through.
          */
         const val EXTRA_WEB_DOMAIN = "web_domain"
+
+        /**
+         * This block is Nuke Mode's (`BlockDecision.Block.nuke`). Rendered by [NukeBlockContent],
+         * which has no daily-pass button and one way off the screen: the walk-away. See
+         * `docs/architecture/nuke-mode.md`.
+         */
+        const val EXTRA_NUKE = "nuke"
     }
 
     /**
@@ -217,6 +224,7 @@ class BlockOverlayActivity : ComponentActivity() {
 
         val delaySeconds = intent.getIntExtra(EXTRA_DELAY_SECONDS, 15)
         val packageName = intent.getStringExtra(EXTRA_PACKAGE_NAME) ?: ""
+        val nuke = intent.getBooleanExtra(EXTRA_NUKE, false)
 
         // Assert the overlay flag (and WHICH app it is blocking) synchronously here rather than in
         // onCreate/onNewIntent: those run before the intent is parsed, and the service's issue-#19
@@ -302,7 +310,15 @@ class BlockOverlayActivity : ComponentActivity() {
                     // `when` stays exhaustive and a future mode cannot silently fall through.
                     BlockMode.NONE -> Unit
 
-                    BlockMode.HARD_BLOCK -> {
+                    // Nuke's block is a HARD_BLOCK to everything that counts and records it, and a
+                    // different SCREEN: no daily pass, no rule messages, "Go home" only.
+                    BlockMode.HARD_BLOCK -> if (nuke) {
+                        NukeBlockContent(
+                            packageName = packageName,
+                            appLabel = appLabel,
+                            onGoHome = { navigateHome() }
+                        )
+                    } else {
                         HardBlockContent(
                             packageName = packageName,
                             appLabel = appLabel,

@@ -190,7 +190,8 @@ class WidgetSnapshotMapperTest {
             val result = WidgetSnapshotMapper.protection(
                 enabled = case.enabled,
                 degraded = case.degraded,
-                strictModeEnabled = case.strict
+                strictModeEnabled = case.strict,
+                nukeActive = false
             )
 
             assertEquals(
@@ -207,28 +208,46 @@ class WidgetSnapshotMapperTest {
     }
 
     @Test
-    fun `togglesInWidget is false exactly when enabled and strictModeEnabled are both true`() {
-        // Strict Mode must gate turning protection OFF: a widget that wrote the pref directly
-        // would be a one-tap bypass of the commitment lock the app's typed challenge exists to
-        // enforce. So the ONLY combination that refuses the toggle is enabled && strictModeEnabled.
+    fun `togglesInWidget is false exactly when enabled and a lock (Strict Mode or Nuke) is on`() {
+        // Strict Mode and Nuke both gate turning protection OFF: a widget that wrote the pref
+        // directly would be a one-tap bypass of either lock. So the ONLY combinations that refuse
+        // the toggle are enabled && (strictModeEnabled || nukeActive). All sixteen inputs.
         for (enabled in listOf(true, false)) {
             for (degraded in listOf(true, false)) {
                 for (strict in listOf(true, false)) {
-                    val result = WidgetSnapshotMapper.protection(enabled, degraded, strict)
-                    val expectedRefusal = enabled && strict
-                    assertEquals(
-                        "enabled=$enabled degraded=$degraded strict=$strict",
-                        !expectedRefusal,
-                        result.togglesInWidget
-                    )
+                    for (nuke in listOf(true, false)) {
+                        val result = WidgetSnapshotMapper.protection(enabled, degraded, strict, nuke)
+                        val expectedRefusal = enabled && (strict || nuke)
+                        assertEquals(
+                            "enabled=$enabled degraded=$degraded strict=$strict nuke=$nuke",
+                            !expectedRefusal,
+                            result.togglesInWidget
+                        )
+                    }
                 }
             }
         }
     }
 
     @Test
+    fun `Nuke alone locks the widget toggle`() {
+        val result = WidgetSnapshotMapper.protection(
+            enabled = true,
+            degraded = false,
+            strictModeEnabled = false,
+            nukeActive = true
+        )
+        assertFalse(result.togglesInWidget)
+    }
+
+    @Test
     fun `degraded is suppressed when protection is off so state reads OFF not DEGRADED`() {
-        val result = WidgetSnapshotMapper.protection(enabled = false, degraded = true, strictModeEnabled = false)
+        val result = WidgetSnapshotMapper.protection(
+            enabled = false,
+            degraded = true,
+            strictModeEnabled = false,
+            nukeActive = false
+        )
 
         // A switched-off Nudge is not a broken Nudge.
         assertEquals(ProtectionState.OFF, result.state)

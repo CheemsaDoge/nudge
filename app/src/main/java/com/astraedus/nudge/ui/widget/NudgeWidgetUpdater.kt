@@ -15,6 +15,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -94,8 +95,10 @@ class NudgeWidgetUpdater @Inject constructor(
             combine(
                 preferences.isGlobalEnabled,
                 preferences.protectionDegraded,
-                preferences.isStrictModeEnabled
-            ) { enabled, degraded, strict -> Triple(enabled, degraded, strict) }
+                preferences.isStrictModeEnabled,
+                // Nuke locks the widget's toggle too, so a Nuke change must re-render it.
+                preferences.nukeState.map { it.active }
+            ) { enabled, degraded, strict, nuke -> listOf(enabled, degraded, strict, nuke) }
                 // DataStore re-emits the whole preferences object on any write, so without this
                 // every unrelated setting would refresh the widgets.
                 .distinctUntilChanged()

@@ -115,14 +115,16 @@ object WidgetReads {
             val enabled = prefs.isGlobalEnabled.first()
             val degraded = prefs.protectionDegraded.first()
             val strict = prefs.isStrictModeEnabled.first()
+            val nuke = prefs.nukeState.first().active
             // What this render actually SAW. The difference between "the refresh never ran", "it
             // ran and read stale values" and "it ran, read correctly, and lost the render" is three
             // completely different bugs, and without this line they look identical from outside.
-            Log.d("NudgeWidgetUpdater", "protection read: enabled=$enabled degraded=$degraded strict=$strict")
+            Log.d("NudgeWidgetUpdater", "protection read: enabled=$enabled degraded=$degraded strict=$strict nuke=$nuke")
             WidgetSnapshotMapper.protection(
                 enabled = enabled,
                 degraded = degraded,
-                strictModeEnabled = strict
+                strictModeEnabled = strict,
+                nukeActive = nuke
             )
         }
 
