@@ -271,6 +271,22 @@ class NukeViewModel @Inject constructor(
         }
     }
 
+    // --- the unlock dialog (see [com.astraedus.nudge.ui.nuke.NukeUnlockHost]) ----------------
+
+    fun onUnlockScanned(payload: String?) {
+        viewModelScope.launch { gate.onScanned(payload) }
+    }
+
+    fun useEmergencyCode() = gate.useEmergencyCode()
+
+    fun verifyEmergency(input: String) {
+        viewModelScope.launch { gate.verifyEmergency(input) }
+    }
+
+    fun backToUnlockChoice() = gate.backToChoice()
+
+    fun cancelUnlock() = gate.cancel()
+
     // --- scans ---------------------------------------------------------------------------------
 
     /**
