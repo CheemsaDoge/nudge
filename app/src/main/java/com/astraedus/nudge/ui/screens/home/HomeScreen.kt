@@ -48,6 +48,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.astraedus.nudge.ui.components.StrictModeChallengeHost
+import com.astraedus.nudge.ui.nuke.NukeUnlockHost
 import com.astraedus.nudge.ui.screens.stats.charts.BlockedTrendChart
 import com.astraedus.nudge.ui.screens.stats.charts.WeeklyBarChart
 
@@ -61,16 +62,28 @@ fun HomeScreen(
     onNavigateToActiveRules: () -> Unit = {},
     onNavigateToWillpower: () -> Unit = {},
     onNavigateToInterventions: () -> Unit = {},
-    onNavigateToAppDetail: (String) -> Unit = {}
+    onNavigateToAppDetail: (String) -> Unit = {},
+    onNavigateToNuke: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val challenge by viewModel.challenge.collectAsStateWithLifecycle()
+    val nukeSummary by viewModel.nukeSummary.collectAsStateWithLifecycle()
+    val nukeUnlock by viewModel.nukeUnlock.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     StrictModeChallengeHost(
         challenge = challenge,
         onVerify = viewModel::verifyChallenge,
         onCancel = viewModel::cancelChallenge
+    )
+
+    NukeUnlockHost(
+        state = nukeUnlock,
+        onScanned = viewModel::onNukeScanned,
+        onUseEmergencyCode = viewModel::useNukeEmergencyCode,
+        onVerifyEmergency = viewModel::verifyNukeEmergency,
+        onBackToChoice = viewModel::backToNukeChoice,
+        onCancel = viewModel::cancelNukeUnlock
     )
 
     Scaffold(
@@ -137,6 +150,11 @@ fun HomeScreen(
                     action = TileAction("Manage", onNavigateToActiveRules)
                 )
             }
+
+            NukeCard(
+                summary = nukeSummary,
+                onClick = onNavigateToNuke
+            )
 
             WeekAtAGlanceCard(
                 charts = state.charts,

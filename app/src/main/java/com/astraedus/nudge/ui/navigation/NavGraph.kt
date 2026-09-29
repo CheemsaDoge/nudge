@@ -18,6 +18,8 @@ import com.astraedus.nudge.ui.screens.groups.GroupScreen
 import com.astraedus.nudge.ui.screens.groups.GroupViewModel
 import com.astraedus.nudge.ui.screens.home.HomeScreen
 import com.astraedus.nudge.ui.screens.home.HomeViewModel
+import com.astraedus.nudge.ui.screens.nuke.NukeScreen
+import com.astraedus.nudge.ui.screens.nuke.NukeViewModel
 import com.astraedus.nudge.ui.screens.onboarding.OnboardingScreen
 import com.astraedus.nudge.ui.screens.config.UnifiedAppConfigScreen
 import com.astraedus.nudge.ui.screens.config.UnifiedAppConfigViewModel
@@ -61,6 +63,7 @@ sealed class Screen(val route: String) {
     data object AppDetail : Screen("app_detail/{packageName}") {
         fun createRoute(packageName: String) = "app_detail/$packageName"
     }
+    data object Nuke : Screen("nuke")
 }
 
 @Composable
@@ -134,7 +137,16 @@ fun NudgeNavGraph(
                 onNavigateToInterventions = { navController.navigate(Screen.Interventions.route) },
                 onNavigateToAppDetail = { pkg ->
                     navController.navigate(Screen.AppDetail.createRoute(pkg))
-                }
+                },
+                onNavigateToNuke = { navController.navigate(Screen.Nuke.route) }
+            )
+        }
+
+        composable(Screen.Nuke.route) {
+            val viewModel: NukeViewModel = hiltViewModel()
+            NukeScreen(
+                viewModel = viewModel,
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
