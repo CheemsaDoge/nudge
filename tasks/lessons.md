@@ -1400,3 +1400,14 @@ in the source, and the counterfactual carries the behavioural proof instead.
   the default `SHORT` format prints "some unrelated test failed, re-run the job" and the full
   format prints the offender's stack. Check what a framework's default log format is actually
   showing before concluding an exception has no useful detail.
+
+## 2026-09-29, a QA script silently switched the shared bench's signing key
+
+- **An "uninstall and retry" fallback on a SHARED device is a state change owned by the next
+  lane, not by you.** `device-qa.sh` answered every install failure (and every `APK=debug`) with
+  `pm uninstall` + reinstall. Across signing keys that swaps the bench to a debug build, and every
+  later CI/release install dies with `INSTALL_FAILED_UPDATE_INCOMPATIBLE` for whoever comes next.
+  Compare the installed and incoming signers (apksigner on both sides, by digest, never the
+  DEBUGGABLE flag) BEFORE touching the device, refuse by default, make the switch an explicit
+  opt-in (`ALLOW_CERT_SWITCH=1`), and print the way back on exit. Pinned by
+  `scripts/test-cert-guard.sh`.
