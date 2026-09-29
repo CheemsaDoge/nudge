@@ -72,6 +72,12 @@ class QrScanActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        // Debug builds only: bench QA's stand-in for the camera. Always null in release.
+        DebugScanOverride.read()?.let { fake ->
+            finishWith(fake)
+            return
+        }
+
         val title = intent.getStringExtra(EXTRA_TITLE).orEmpty()
         val subtitle = intent.getStringExtra(EXTRA_SUBTITLE)
 
