@@ -132,6 +132,19 @@ dependencies {
     implementation("androidx.glance:glance-appwidget:1.2.0")
     implementation("androidx.glance:glance-material3:1.2.0")
 
+    // QR / barcode scanning and generation (ui/qr/, docs/architecture/qr.md). FOSS only: Nudge
+    // ships on F-Droid and IzzyOnDroid, so ML Kit and the Play-services code scanner are out.
+    //  - zxing core (Apache-2.0): pure-Java encode + decode. The decode runs in OUR code over the
+    //    camera's luminance plane, which is what makes it JVM-testable.
+    //  - CameraX (Apache-2.0, AOSP Jetpack, no Play services): Camera2 under a lifecycle-bound API,
+    //    torch control, and PreviewView. Chosen over zxing-android-embedded, which drives the
+    //    deprecated Camera1 API, ships its own View-based landscape capture activity and is in
+    //    maintenance mode. 1.5.3 is built against kotlin-stdlib 2.0.21, this project's Kotlin.
+    implementation("com.google.zxing:core:3.5.3")
+    implementation("androidx.camera:camera-camera2:1.5.3")
+    implementation("androidx.camera:camera-lifecycle:1.5.3")
+    implementation("androidx.camera:camera-view:1.5.3")
+
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
