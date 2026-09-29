@@ -1,5 +1,6 @@
 package com.astraedus.nudge.domain.usecase
 
+import com.astraedus.nudge.domain.nuke.NukeEnforcement
 import com.astraedus.nudge.data.preferences.NudgePreferences
 import com.astraedus.nudge.data.repository.BlockRuleRepository
 import com.astraedus.nudge.data.repository.ContentFilter
@@ -55,7 +56,8 @@ class EvaluateBlockContentFilterTest {
             ruleEvaluator = RuleEvaluator(),
             scheduleEvaluator = ScheduleEvaluator(),
             preferences = preferences,
-            contentFilter = contentFilter
+            contentFilter = contentFilter,
+            nukeEnforcement = NukeEnforcement.NEVER
         )
     }
 

@@ -19,6 +19,13 @@ sealed class BlockDecision {
          * `true`) because [BlockDecision.Allow] never carries it and a `Block` built without an
          * explicit value should never accidentally claim the cover is wanted.
          */
-        val tabVanish: Boolean = false
+        val tabVanish: Boolean = false,
+        /**
+         * This block is Nuke Mode's, not a rule's. The overlay renders it with NO daily 2-minute
+         * pass and only "Go home" (the way out of Nuke is the key or the emergency code, not the
+         * pass), and the launch fingerprint keeps it distinct from a rule's hard block so a pending
+         * rule overlay can never swallow it as a duplicate.
+         */
+        val nuke: Boolean = false
     ) : BlockDecision()
 }

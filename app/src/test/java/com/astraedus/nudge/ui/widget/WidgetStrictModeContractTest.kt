@@ -102,6 +102,31 @@ class WidgetStrictModeContractTest {
     }
 
     /**
+     * Nuke Mode locks the same write (docs/architecture/nuke-mode.md): with Nuke on, the master
+     * toggle is the obvious one-tap way around it. Same-line, for the same reason as above, and read
+     * fresh from the preference inside the callback.
+     */
+    @Test
+    fun `no widget turns protection off while Nuke is on`() {
+        val writes = widgetSources().flatMap { file ->
+            source(file.path.substringAfter("src/")).lines()
+                .filter { it.contains("setGlobalEnabled(false)") }
+        }
+        assertTrue("the guarded write must exist", writes.isNotEmpty())
+        writes.forEach { line ->
+            assertTrue(
+                "setGlobalEnabled(false) must also carry the !nukeActive guard: ${line.trim()}",
+                line.contains("!nukeActive")
+            )
+        }
+        assertTrue(
+            "$protectionWidget must read Nuke's state fresh inside the action callback",
+            Regex("""nukeActive\s*=\s*preferences\.nukeState\.first\(\)\.active""")
+                .containsMatchIn(source(protectionWidget))
+        )
+    }
+
+    /**
      * The guard has to be read from the preference, not from whatever the widget happened to be
      * rendering when it was drawn. That snapshot can be minutes old.
      */

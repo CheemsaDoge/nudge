@@ -69,7 +69,14 @@ sealed interface WidgetSnapshot {
     data class Protection(
         val enabled: Boolean,
         val degraded: Boolean,
-        val strictModeEnabled: Boolean
+        val strictModeEnabled: Boolean,
+        /**
+         * Nuke Mode is on. The master toggle is the obvious one-tap way around Nuke, so while it is
+         * on the widget is locked exactly as it is under Strict Mode (docs/architecture/nuke-mode.md).
+         * Defaults false only so existing constructions keep their meaning; every production read
+         * sets it.
+         */
+        val nukeActive: Boolean = false
     ) : WidgetSnapshot {
 
         /** The single visual state, so no composable re-derives it from the three flags. */
@@ -93,7 +100,7 @@ sealed interface WidgetSnapshot {
          * runtime `if` somebody can quietly invert inside a callback.
          */
         val togglesInWidget: Boolean
-            get() = !(enabled && strictModeEnabled)
+            get() = !(enabled && (strictModeEnabled || nukeActive))
 
         companion object {
             /**
@@ -176,13 +183,15 @@ object WidgetSnapshotMapper {
     fun protection(
         enabled: Boolean,
         degraded: Boolean,
-        strictModeEnabled: Boolean
+        strictModeEnabled: Boolean,
+        nukeActive: Boolean
     ): WidgetSnapshot.Protection = WidgetSnapshot.Protection(
         enabled = enabled,
         // A switched-OFF Nudge is not a broken Nudge. Reporting "blocking has stopped" over a
         // toggle the user deliberately turned off would train them to ignore the one message that
         // means their phone killed us.
         degraded = degraded && enabled,
-        strictModeEnabled = strictModeEnabled
+        strictModeEnabled = strictModeEnabled,
+        nukeActive = nukeActive
     )
 }

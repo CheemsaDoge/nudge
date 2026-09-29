@@ -43,6 +43,8 @@ import com.astraedus.nudge.domain.surfaces.TabCoverPlacement
 import com.astraedus.nudge.domain.web.WebDomainGate
 import com.astraedus.nudge.domain.web.WebSessionKey
 import com.astraedus.nudge.domain.usecase.EvaluateBlockUseCase
+import com.astraedus.nudge.domain.nuke.NukeEmergencyCode
+import com.astraedus.nudge.domain.nuke.NukePolicy
 import com.astraedus.nudge.ui.lock.StrictModeGuardActivity
 import com.astraedus.nudge.ui.overlay.BlockOverlayActivity
 import com.astraedus.nudge.ui.overlay.PipEscapeActivity
@@ -84,6 +86,7 @@ class NudgeAccessibilityService : AccessibilityService() {
         fun strictModeEscapeManager(): StrictModeEscapeManager
         fun emergencyPassManager(): EmergencyPassManager
         fun blockLaunchGuard(): BlockLaunchGuard
+        fun nukeSafetyFloor(): NukeSafetyFloor
     }
 
     /**
@@ -255,6 +258,9 @@ class NudgeAccessibilityService : AccessibilityService() {
          * content changes cannot hammer the node tree.
          */
         private const val SWITCH_CHECK_DEBOUNCE_MS = 500L
+
+        /** The launch fingerprint's mode for a Nuke block. Distinct from every BlockMode name. */
+        private const val NUKE_FINGERPRINT_MODE = "NUKE"
 
         val SYSTEM_PACKAGES = setOf(
             "com.android.systemui",
@@ -533,6 +539,27 @@ class NudgeAccessibilityService : AccessibilityService() {
      * enforcement state so a disabled Nudge behaves as if uninstalled.
      */
     @Volatile private var globalEnabledCached: Boolean = true
+
+    /**
+     * Nuke Mode, cached for the synchronous hot path exactly like [strictModeEnabledCached]:
+     * collected off-main in [onServiceConnected], so the event path answers "is this app nuked?"
+     * with a set lookup and never blocks on DataStore or PackageManager.
+     *
+     * [nukedPackagesCached] is the ENFORCEABLE set -- the stored list with this device's safety floor
+     * already removed ([NukePolicy.enforceable]), because the floor needs binder calls the hot path
+     * must not make. [isNukedNow] re-applies the static floor on top, so even a stale cache cannot
+     * nuke the dialer. Both default to "off": before the first emission we cannot know, and the
+     * evaluation use case asks the persisted state independently, so a nuked app is still blocked
+     * through the ordinary path in that window -- it merely does not yet skip the grants below.
+     */
+    @Volatile private var nukeActiveCached: Boolean = false
+    @Volatile private var nukedPackagesCached: Set<String> = emptySet()
+
+    /** Is [packageName] nuked right now? Synchronous; see [nukeActiveCached]. */
+    private fun isNukedNow(packageName: String): Boolean =
+        nukeActiveCached &&
+            packageName in nukedPackagesCached &&
+            !NukePolicy.isProtected(packageName, emptySet())
 
     /**
      * Package of the currently-selected default keyboard (IME), read from
@@ -996,6 +1023,30 @@ class NudgeAccessibilityService : AccessibilityService() {
             }
         }
 
+        // Nuke Mode, cached for the hot path. On Nuke turning ON (or apps being ADDED while it is
+        // on), the app in front is re-evaluated at once: a passthrough grant, a daily 2-minute pass
+        // or a cooldown that was open when Nuke started must not keep a nuked app on screen until
+        // the user happens to generate another window event. See docs/architecture/nuke-mode.md.
+        serviceScope.launch {
+            entryPoint.nudgePreferences().nukeState.collect { state ->
+                val enforced = if (state.active) {
+                    NukePolicy.enforceable(state.packages, entryPoint.nukeSafetyFloor().deviceFloor())
+                } else {
+                    emptySet()
+                }
+                val newlyNuked = enforced - nukedPackagesCached
+                nukedPackagesCached = enforced
+                nukeActiveCached = state.active
+                entryPoint.nudgeLogger().i(
+                    "nuke state active=${state.active} enforced=${enforced.size} " +
+                        "newlyNuked=${newlyNuked.size}"
+                )
+                if (newlyNuked.isNotEmpty()) {
+                    withContext(Dispatchers.Main) { reevaluateForegroundForNuke(newlyNuked) }
+                }
+            }
+        }
+
         // Issue #19: which apps we have already explained the picture-in-picture escape for. Cached
         // off-main so the check is synchronous on the event path.
         serviceScope.launch {
@@ -1055,6 +1106,26 @@ class NudgeAccessibilityService : AccessibilityService() {
         if (counterCache.getEntry(front)?.needsForegroundTimeTick != true) return
         entryPoint.nudgeLogger().i("foreground clock restarted after rebind package=$front")
         updateForegroundTimeTicker(front)
+    }
+
+    /**
+     * Nuke just started covering [newlyNuked]: if one of them is the app in front RIGHT NOW, block it
+     * now rather than on the user's next window event.
+     *
+     * Reads the live active window (like [restartForegroundClockAfterRebind]), and does nothing when
+     * that is unreadable, Nudge itself (the usual case: the user armed Nuke from inside Nudge), or not
+     * a newly nuked app. The debounce is spent so the evaluation below is not swallowed as a repeat
+     * of one that happened a moment ago under a grant. It then goes through [evaluateForegroundPackage]
+     * like any other arrival -- the launch gate, the arrival invariant and the row are all the
+     * ordinary ones.
+     */
+    private fun reevaluateForegroundForNuke(newlyNuked: Set<String>) {
+        if (!globalEnabledCached) return
+        val front = activeWindowPackageOrNull() ?: return
+        if (front == packageName || front !in newlyNuked) return
+        entryPoint.nudgeLogger().i("nuke started over the app in front package=$front")
+        lastEvalTime = 0L
+        evaluateForegroundPackage(front)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -1432,7 +1503,12 @@ class NudgeAccessibilityService : AccessibilityService() {
     private fun maybeGuardSettingsEscape(packageName: String) {
         // Cheap, non-blocking gates BEFORE touching the node tree (the expensive part). State is
         // read from the cached flags so this hot path never blocks on DataStore.
-        if (!strictModeEnabledCached) return
+        // Nuke engages the same guard as Strict Mode: disabling the accessibility service or
+        // uninstalling is the one exit Nuke cannot otherwise see. Its unlock there costs the Nuke
+        // emergency code's length (see below), and the guard's own invariants are unchanged:
+        // cancel always goes home, the challenge is always solvable.
+        val nukeGuarding = nukeActiveCached
+        if (!strictModeEnabledCached && !nukeGuarding) return
         val escapeManager = entryPoint.strictModeEscapeManager()
         if (escapeManager.isWithinGrace()) return
         // The guard overlay is itself a Nudge activity; don't re-guard while it's up.
@@ -1458,7 +1534,17 @@ class NudgeAccessibilityService : AccessibilityService() {
 
         val intent = Intent(applicationContext, StrictModeGuardActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            putExtra(StrictModeGuardActivity.EXTRA_CHALLENGE_LENGTH, strictModeChallengeLengthCached)
+            // While Nuke is on, getting past this screen is a way out of Nuke, so it costs what
+            // ending Nuke without the key costs. Never LESS than the Strict Mode difficulty.
+            putExtra(
+                StrictModeGuardActivity.EXTRA_CHALLENGE_LENGTH,
+                if (nukeGuarding) {
+                    maxOf(NukeEmergencyCode.LENGTH, strictModeChallengeLengthCached)
+                } else {
+                    strictModeChallengeLengthCached
+                }
+            )
+            putExtra(StrictModeGuardActivity.EXTRA_NUKE, nukeGuarding)
         }
         applicationContext.startActivity(intent)
     }
@@ -1488,6 +1574,89 @@ class NudgeAccessibilityService : AccessibilityService() {
             return ""
         }
         return sb.toString()
+    }
+
+    /**
+     * The GRANTS: the ways a user gets into an app its rules gate without meeting the block this
+     * time -- the daily 2-minute pass, the auto-kick cooldown (which shows its own overlay instead
+     * of the rule's) and a completed delay's passthrough. Returns true when one of them handled this
+     * arrival, i.e. when [evaluateForegroundPackage] must stop here.
+     *
+     * Extracted from [evaluateForegroundPackage] so Nuke can skip all of them with one condition
+     * rather than a flag threaded through each (docs/architecture/nuke-mode.md): a nuked app has no
+     * way in but the key or the emergency code, so none of these may be consulted for it. The order
+     * inside is unchanged from when it was inline.
+     */
+    private fun grantLetsThrough(packageName: String, passthrough: PassthroughManager): Boolean {
+        // Emergency "2-minute daily pass": while a free window is open for this app, let it through —
+        // overriding normal evaluation AND any auto-kick cooldown (placed before the cooldown block so
+        // the user gets genuinely free use). The window is per-app; the lockout it recorded is global.
+        // At expiry the manager kicks home and the next foreground event re-blocks normally as a
+        // backstop.
+        if (entryPoint.emergencyPassManager().isPassActive(packageName)) {
+            entryPoint.nudgeLogger().d("skip evaluation package=$packageName reason=emergency_pass")
+            if (counterCache.isCounterEnabled(packageName) && !interactionHandler.isCounterVisible()) {
+                interactionHandler.onAppChanged(packageName)
+            }
+            return true
+        }
+
+        val tracker = entryPoint.interactionTracker()
+        // The ONE enforcement path in this service that runs before any rule is looked up, and the
+        // only one that writes no UsageEvent. Its authority must be derived from a rule that still
+        // exists, never remembered from one that used to: delete a rule (or turn its auto-kick off)
+        // with a cooldown armed and the in-memory map would keep ejecting the user from an app
+        // nothing is configured to block, invisibly, for the whole cooldown. See [CooldownGate].
+        //
+        // The authority is `configuresAutoKick`, NOT bare cache membership: since a daily limit
+        // alone now puts a package in the cache, membership would have said "some rule still wants
+        // this package" for a rule that cannot kick at all, and turning auto-kick off while keeping
+        // a limit would have left the armed cooldown enforcing. Same question, narrower evidence.
+        val autoKickConfigured = counterCache.getEntry(packageName)?.configuresAutoKick == true
+        if (CooldownGate.isStale(autoKickConfigured, tracker.isInCooldown(packageName))) {
+            entryPoint.nudgeLogger().i(
+                "stale auto-kick cooldown dropped package=$packageName reason=no_auto_kick_configured"
+            )
+            tracker.clearCooldown(packageName)
+        }
+        if (CooldownGate.shouldEnforce(autoKickConfigured, tracker.isInCooldown(packageName))) {
+            val remainingMs = tracker.getCooldownRemainingMs(packageName)
+            val remainingSeconds = ((remainingMs + 999) / 1000).toInt().coerceAtLeast(1)
+            entryPoint.nudgeLogger().i(
+                "cooldown enforced package=$packageName remaining=${remainingSeconds}s"
+            )
+            launchBlockOverlay(
+                targetPackage = packageName,
+                attributedPackage = packageName,
+                // `remainingSeconds` is deliberately NOT part of this: it counts down every time
+                // the cooldown is read, and a fingerprint over a moving number would make every
+                // re-launch inside the settle window look like a different block. See
+                // [BlockLaunchGate.decisionFingerprint].
+                decisionKey = BlockLaunchGate.decisionFingerprint(
+                    attributedPackage = packageName,
+                    blockMode = "DELAY"
+                )
+            ) {
+                putExtra(BlockOverlayActivity.EXTRA_BLOCK_MODE, "DELAY")
+                putExtra(BlockOverlayActivity.EXTRA_DELAY_SECONDS, remainingSeconds)
+                putExtra(BlockOverlayActivity.EXTRA_PACKAGE_NAME, packageName)
+                putExtra(BlockOverlayActivity.EXTRA_RULE_NAME, "Auto-kick cooldown")
+            }
+            return true
+        }
+
+        // Show time remaining overlay before passthrough check (awareness overlays always show)
+        timeRemainingHandler.showIfNeeded(packageName)
+
+        if (passthrough.shouldSkipForegroundEvaluation(packageName)) {
+            entryPoint.nudgeLogger().d("skip evaluation package=$packageName reason=passthrough")
+            // Ensure counter is visible post-delay (onAppChanged may not re-fire)
+            if (counterCache.isCounterEnabled(packageName) && !interactionHandler.isCounterVisible()) {
+                interactionHandler.onAppChanged(packageName)
+            }
+            return true
+        }
+        return false
     }
 
     private fun evaluateForegroundPackage(packageName: String) {
@@ -1541,74 +1710,15 @@ class NudgeAccessibilityService : AccessibilityService() {
         // exactly who a time-based auto-kick is for, and their minutes must keep accruing.
         updateForegroundTimeTicker(packageName)
 
-        // Emergency "2-minute daily pass": while a free window is open for this app, let it through —
-        // overriding normal evaluation AND any auto-kick cooldown (placed before the cooldown block so
-        // the user gets genuinely free use). The window is per-app; the lockout it recorded is global.
-        // At expiry the manager kicks home and the next foreground event re-blocks normally as a
-        // backstop.
-        if (entryPoint.emergencyPassManager().isPassActive(packageName)) {
-            entryPoint.nudgeLogger().d("skip evaluation package=$packageName reason=emergency_pass")
-            if (counterCache.isCounterEnabled(packageName) && !interactionHandler.isCounterVisible()) {
-                interactionHandler.onAppChanged(packageName)
-            }
-            return
-        }
-
-        val tracker = entryPoint.interactionTracker()
-        // The ONE enforcement path in this service that runs before any rule is looked up, and the
-        // only one that writes no UsageEvent. Its authority must be derived from a rule that still
-        // exists, never remembered from one that used to: delete a rule (or turn its auto-kick off)
-        // with a cooldown armed and the in-memory map would keep ejecting the user from an app
-        // nothing is configured to block, invisibly, for the whole cooldown. See [CooldownGate].
-        //
-        // The authority is `configuresAutoKick`, NOT bare cache membership: since a daily limit
-        // alone now puts a package in the cache, membership would have said "some rule still wants
-        // this package" for a rule that cannot kick at all, and turning auto-kick off while keeping
-        // a limit would have left the armed cooldown enforcing. Same question, narrower evidence.
-        val autoKickConfigured = counterCache.getEntry(packageName)?.configuresAutoKick == true
-        if (CooldownGate.isStale(autoKickConfigured, tracker.isInCooldown(packageName))) {
-            entryPoint.nudgeLogger().i(
-                "stale auto-kick cooldown dropped package=$packageName reason=no_auto_kick_configured"
-            )
-            tracker.clearCooldown(packageName)
-        }
-        if (CooldownGate.shouldEnforce(autoKickConfigured, tracker.isInCooldown(packageName))) {
-            val remainingMs = tracker.getCooldownRemainingMs(packageName)
-            val remainingSeconds = ((remainingMs + 999) / 1000).toInt().coerceAtLeast(1)
-            entryPoint.nudgeLogger().i(
-                "cooldown enforced package=$packageName remaining=${remainingSeconds}s"
-            )
-            launchBlockOverlay(
-                targetPackage = packageName,
-                attributedPackage = packageName,
-                // `remainingSeconds` is deliberately NOT part of this: it counts down every time
-                // the cooldown is read, and a fingerprint over a moving number would make every
-                // re-launch inside the settle window look like a different block. See
-                // [BlockLaunchGate.decisionFingerprint].
-                decisionKey = BlockLaunchGate.decisionFingerprint(
-                    attributedPackage = packageName,
-                    blockMode = "DELAY"
-                )
-            ) {
-                putExtra(BlockOverlayActivity.EXTRA_BLOCK_MODE, "DELAY")
-                putExtra(BlockOverlayActivity.EXTRA_DELAY_SECONDS, remainingSeconds)
-                putExtra(BlockOverlayActivity.EXTRA_PACKAGE_NAME, packageName)
-                putExtra(BlockOverlayActivity.EXTRA_RULE_NAME, "Auto-kick cooldown")
-            }
-            return
-        }
-
-        // Show time remaining overlay before passthrough check (awareness overlays always show)
-        timeRemainingHandler.showIfNeeded(packageName)
-
-        if (passthrough.shouldSkipForegroundEvaluation(packageName)) {
-            entryPoint.nudgeLogger().d("skip evaluation package=$packageName reason=passthrough")
-            // Ensure counter is visible post-delay (onAppChanged may not re-fire)
-            if (counterCache.isCounterEnabled(packageName) && !interactionHandler.isCounterVisible()) {
-                interactionHandler.onAppChanged(packageName)
-            }
-            return
-        }
+        // NUKE SKIPS EVERY GRANT (docs/architecture/nuke-mode.md). The daily 2-minute pass, the
+        // auto-kick cooldown overlay and a completed delay's passthrough are all ways INTO an app a
+        // rule gates; none of them is a way into a nuked app. So for a nuked package
+        // [grantLetsThrough] is never consulted and it goes straight to the debounce and the
+        // evaluation below, where `EvaluateBlockUseCase` returns Nuke's hard block as the engine's
+        // first step. Everything ABOVE this line (grayscale, the web session, the counter, the
+        // clock) still runs for it: this skips the grants, it is not an early return.
+        val nuked = isNukedNow(packageName)
+        if (!nuked && grantLetsThrough(packageName, passthrough)) return
 
         // THE LINE THAT ISSUE #28 WAS: `passthrough.clearIfAppChanged(packageName)` used to sit
         // here, so ANY foreign package reaching this function revoked the user's completed delay.
@@ -1631,8 +1741,9 @@ class NudgeAccessibilityService : AccessibilityService() {
             val globalEnabled = entryPoint.nudgePreferences().isGlobalEnabled.first()
             if (!globalEnabled) return@launch
 
-            // For browsers, evaluate web domain blocking instead of (or alongside) app blocking
-            if (entryPoint.webDomainDetector().isBrowser(packageName)) {
+            // For browsers, evaluate web domain blocking instead of (or alongside) app blocking.
+            // Not for a NUKED browser: Nuke blocks the app itself, whatever site is open.
+            if (!nuked && entryPoint.webDomainDetector().isBrowser(packageName)) {
                 evaluateWebDomain(packageName)
             } else {
                 val decision = entryPoint.evaluateBlockUseCase().invoke(packageName)
@@ -2007,6 +2118,16 @@ class NudgeAccessibilityService : AccessibilityService() {
 
     private fun handleWindowContentChanged(record: AccessibilityEventRecord) {
         val packageName = record.packageName
+        // A NUKED browser is an app, not a website: its content changes take the same verified
+        // re-entry check every other unsupported app gets (issue #7), instead of the URL-bar read
+        // below, which could only ever block a SITE. Supported packages already re-evaluate the
+        // whole app on every content change further down.
+        // (Spelled with `contains` so the supported-packages gate below stays the first
+        // `!in SUPPORTED_PACKAGES` in this file, which FollowingSteerCadenceContractTest locates.)
+        if (isNukedNow(packageName) && !InAppDetector.SUPPORTED_PACKAGES.contains(packageName)) {
+            maybeEvaluateContentChangeAsAppSwitch(record)
+            return
+        }
         // For browsers, content changes may indicate URL navigation -- re-evaluate web domain
         if (entryPoint.webDomainDetector().isBrowser(packageName)) {
             val now = System.currentTimeMillis()
@@ -2073,6 +2194,11 @@ class NudgeAccessibilityService : AccessibilityService() {
      * has never been the bottleneck; recognising the surface is.
      */
     private fun detectAndEvaluateFeature(packageName: String) {
+        // A nuked app is blocked WHOLE by `evaluateForegroundPackage`, which its caller has just run.
+        // A feature-level evaluation on top would only launch the same Nuke block a second time under
+        // a different confrontation key, and the Reels cover / Following steer have nothing to do in
+        // an app the user cannot be in.
+        if (isNukedNow(packageName)) return
         val now = System.currentTimeMillis()
         val lastTime = lastContentChangedTime[packageName] ?: 0L
         if ((now - lastTime) < contentChangedDebounceMs) return
@@ -2572,7 +2698,9 @@ class NudgeAccessibilityService : AccessibilityService() {
                     // screen the user was trying to get past.
                     decisionKey = BlockLaunchGate.decisionFingerprint(
                         attributedPackage = packageName,
-                        blockMode = decision.mode.name,
+                        // Nuke's hard block is its own block: a pending RULE hard block for the
+                        // same app must not swallow it as a duplicate (issue #50's shape).
+                        blockMode = if (decision.nuke) NUKE_FINGERPRINT_MODE else decision.mode.name,
                         featureKey = featureKey,
                         webDomain = web?.domain,
                         dailyLimited = decision.dailyLimitMinutes != null
@@ -2583,6 +2711,7 @@ class NudgeAccessibilityService : AccessibilityService() {
                     putExtra(BlockOverlayActivity.EXTRA_PACKAGE_NAME, packageName)
                     putExtra(BlockOverlayActivity.EXTRA_FEATURE_KEY, featureKey)
                     putExtra(BlockOverlayActivity.EXTRA_RULE_NAME, decision.ruleName)
+                    putExtra(BlockOverlayActivity.EXTRA_NUKE, decision.nuke)
                     web?.let {
                         putExtra(BlockOverlayActivity.EXTRA_PASSTHROUGH_PACKAGE, it.browserPackage)
                         putExtra(BlockOverlayActivity.EXTRA_WEB_DOMAIN, it.domain)

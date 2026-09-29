@@ -185,13 +185,14 @@ class ToggleProtectionAction : ActionCallback {
         val preferences = NudgeWidgetEntryPoint.from(context).nudgePreferences()
         val enabled = preferences.isGlobalEnabled.first()
         val strictModeEnabled = preferences.isStrictModeEnabled.first()
+        val nukeActive = preferences.nukeState.first().active
 
         if (enabled) {
             // Weakening. Gated on Strict Mode being off, on the SAME line as the write so the
             // guard cannot be separated from what it guards by a later refactor. When Strict Mode
             // is on this is a no-op and the user never reaches it: the composable that routed here
             // is only chosen when togglesInWidget is true.
-            if (!strictModeEnabled) preferences.setGlobalEnabled(false)
+            if (!strictModeEnabled && !nukeActive) preferences.setGlobalEnabled(false)
         } else {
             // Strengthening is never gated, on any surface.
             preferences.setGlobalEnabled(true)

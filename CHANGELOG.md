@@ -4,6 +4,20 @@ All notable changes to Nudge are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+### Added
+- **Nuke Mode.** A second list of apps, separate from your rules, that simply do not open while Nuke
+  is on: no delay, no breathing, no daily 2-minute pass, and it overrides every rule and limit those
+  apps have. You turn it on and off by scanning a code you keep somewhere inconvenient: a QR Nudge
+  generates for you (save, print or send it, then scan it back once to prove you kept it), or any QR
+  or barcode you already own. There is also a plain "Nuke now" button, because turning protection on
+  is always free. With no code to hand, the only way out is typing a fresh 64-character code by
+  hand. While Nuke is on, taking an app off the list, changing or removing the code, and turning
+  Nudge's master switch off (in the app or from the Protection widget) all need the code too, and
+  the Settings screens that switch Nudge off are guarded the way Strict Mode guards them. The phone,
+  launcher, keyboard, Settings and Nudge itself can never be nuked. Nuke state survives reboots and
+  never leaves the phone in a backup; importing a backup cannot change it. Only a SHA-256 of the
+  code is stored. Design and limits: `docs/architecture/nuke-mode.md`.
+
 ### Changed
 - `HomeViewModel`, `BackupViewModel`, `StatsViewModel` and `WillpowerViewModel` now take their
   off-main dispatcher as an injected `@IoDispatcher` (`di/DispatcherModule`) instead of naming

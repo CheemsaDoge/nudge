@@ -50,6 +50,14 @@ class StrictModeGuardActivity : ComponentActivity() {
         const val EXTRA_CHALLENGE_LENGTH = "challenge_length"
 
         /**
+         * The guard is up because NUKE is on (possibly as well as Strict Mode). Only the copy
+         * changes: the length arrives in [EXTRA_CHALLENGE_LENGTH] like always, and the outcomes --
+         * unlock opens the grace window, anything else goes home -- are identical, so the "never
+         * hard-trap the user" invariant is the same code path it always was.
+         */
+        const val EXTRA_NUKE = "nuke"
+
+        /**
          * True while a guard activity is on screen, so the accessibility service does not stack a
          * second guard on top of the first when Settings emits more window events behind it.
          */
@@ -65,6 +73,7 @@ class StrictModeGuardActivity : ComponentActivity() {
 
         val length = intent.getIntExtra(EXTRA_CHALLENGE_LENGTH, StrictModeChallenge.DEFAULT_LENGTH)
         val target = StrictModeChallenge.generate(length)
+        val nuke = intent.getBooleanExtra(EXTRA_NUKE, false)
 
         setContent {
             NudgeTheme {
@@ -82,10 +91,16 @@ class StrictModeGuardActivity : ComponentActivity() {
                         val challengeTarget = remember { target }
                         ChallengeDialog(
                             target = challengeTarget,
-                            prompt = "Strict Mode is protecting this screen. " +
-                                "Unlock to change Nudge's system settings, or go back.",
+                            prompt = if (nuke) {
+                                "Nuke is on, and this screen is a way around it. Type the code to " +
+                                    "change Nudge's system settings, or go back."
+                            } else {
+                                "Strict Mode is protecting this screen. " +
+                                    "Unlock to change Nudge's system settings, or go back."
+                            },
                             onUnlock = { onUnlocked() },
-                            onCancel = { onChangedMind() }
+                            onCancel = { onChangedMind() },
+                            title = if (nuke) "Nuke is on" else "Strict Mode locked"
                         )
                     }
                 }

@@ -17,6 +17,10 @@ import com.astraedus.nudge.data.repository.UsageRepository
 import com.astraedus.nudge.di.IoDispatcher
 import com.astraedus.nudge.domain.engine.TimeTracker
 import com.astraedus.nudge.domain.lock.ChallengeState
+import com.astraedus.nudge.domain.nuke.NukePolicy
+import com.astraedus.nudge.domain.nuke.NukeState
+import com.astraedus.nudge.ui.nuke.NukeGate
+import com.astraedus.nudge.ui.nuke.NukeUnlockState
 import com.astraedus.nudge.ui.lock.StrictModeGate
 import com.astraedus.nudge.ui.screens.stats.AppInterventionStat
 import com.astraedus.nudge.ui.screens.stats.InsightsCalculator
@@ -32,6 +36,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
@@ -81,6 +86,26 @@ data class HomeUiState(
     val topBlocked: List<TopBlockedApp> = emptyList()
 )
 
+/** What the dashboard's Nuke card shows. */
+@Immutable
+data class NukeSummary(
+    val active: Boolean = false,
+    val hasKey: Boolean = false,
+    /** Listed apps with the static safety floor removed (the device floor is the Nuke screen's). */
+    val appCount: Int = 0
+) {
+    /** Never set up at all: no key and no list. The card then invites setup instead of a state. */
+    val needsSetup: Boolean get() = !hasKey && appCount == 0
+
+    companion object {
+        fun from(state: NukeState) = NukeSummary(
+            active = state.active,
+            hasKey = state.hasKey,
+            appCount = NukePolicy.enforceable(state.packages, emptySet()).size
+        )
+    }
+}
+
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class HomeViewModel @Inject constructor(
@@ -100,6 +125,24 @@ class HomeViewModel @Inject constructor(
 
     /** Active Strict Mode unlock challenge, if a weakening action is pending. */
     val challenge: StateFlow<ChallengeState?> = strictModeGate.challenge
+
+    /**
+     * Nuke's gate on the master toggle. While Nuke is on, the master switch is the obvious one-tap
+     * way around it (every enforcement path sits behind `globalEnabled`), so turning it OFF costs
+     * exactly what ending Nuke costs: the key, or the 64-character code.
+     */
+    val nukeGate = NukeGate(currentState = { nudgePreferences.nukeState.first() })
+    val nukeUnlock: StateFlow<NukeUnlockState?> = nukeGate.unlock
+
+    /**
+     * The dashboard's Nuke card. Its OWN flow rather than a field on [uiState]: the card changes
+     * when Nuke does, and folding it into the clock-driven combine would re-render the whole
+     * dashboard state on every Nuke write and vice versa.
+     */
+    val nukeSummary: StateFlow<NukeSummary> = nudgePreferences.nukeState
+        .map { NukeSummary.from(it) }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NukeSummary())
 
     /**
      * Start-of-today, re-derived on every poll tick rather than once at construction.
@@ -334,8 +377,16 @@ class HomeViewModel @Inject constructor(
             val current = uiState.value.isGlobalEnabled
             // Turning protection ON is free; only ON -> OFF (weakening) is gated by Strict Mode.
             if (current) {
-                strictModeGate.run(prompt = "Turn off all blocking") {
-                    nudgePreferences.setGlobalEnabled(false)
+                // Nuke first, then Strict Mode: both locks guard this switch, and each is asked
+                // only once the one before it has been satisfied.
+                val nuke = nudgePreferences.nukeState.first()
+                nukeGate.run(
+                    prompt = "Turn off all blocking",
+                    weaken = NukePolicy.masterToggleOffRequiresUnlock(nuke)
+                ) {
+                    strictModeGate.run(prompt = "Turn off all blocking") {
+                        nudgePreferences.setGlobalEnabled(false)
+                    }
                 }
             } else {
                 nudgePreferences.setGlobalEnabled(true)
@@ -352,6 +403,22 @@ class HomeViewModel @Inject constructor(
     fun cancelChallenge() {
         strictModeGate.cancel()
     }
+
+    // --- Nuke unlock dialog (see [NukeUnlockHost]) --------------------------------------------
+
+    fun onNukeScanned(payload: String?) {
+        viewModelScope.launch { nukeGate.onScanned(payload) }
+    }
+
+    fun useNukeEmergencyCode() = nukeGate.useEmergencyCode()
+
+    fun verifyNukeEmergency(input: String) {
+        viewModelScope.launch { nukeGate.verifyEmergency(input) }
+    }
+
+    fun backToNukeChoice() = nukeGate.backToChoice()
+
+    fun cancelNukeUnlock() = nukeGate.cancel()
 
     companion object {
         private const val POLL_INTERVAL_MS = 30_000L

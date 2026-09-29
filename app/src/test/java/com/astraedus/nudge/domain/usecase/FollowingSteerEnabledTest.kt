@@ -1,5 +1,6 @@
 package com.astraedus.nudge.domain.usecase
 
+import com.astraedus.nudge.domain.nuke.NukeEnforcement
 import com.astraedus.nudge.data.db.entity.BlockRule
 import com.astraedus.nudge.data.preferences.NudgePreferences
 import com.astraedus.nudge.data.repository.BlockRuleRepository
@@ -53,7 +54,8 @@ class FollowingSteerEnabledTest {
             ruleEvaluator = RuleEvaluator(),
             scheduleEvaluator = ScheduleEvaluator(),
             preferences = mockk<NudgePreferences>(),
-            contentFilter = mockk<ContentFilter>()
+            contentFilter = mockk<ContentFilter>(),
+            nukeEnforcement = NukeEnforcement.NEVER
         )
     }
 

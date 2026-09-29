@@ -18,7 +18,15 @@ class BlockEngine @Inject constructor(
      *   list contains this feature will be considered. Whole-app rules are also considered unless
      *   [includeWholeAppRulesForFeature] is false.
      *
-     * Priority: HARD_BLOCK > time budget exceeded > DELAY > HOLD > BREATHING > Allow
+     * Priority: NUKE > HARD_BLOCK > time budget exceeded > DELAY > HOLD > BREATHING > Allow
+     *
+     * @param nuked whether Nuke Mode covers [packageName] right now
+     *   ([com.astraedus.nudge.domain.nuke.NukePolicy.isNuked], decided by the caller because it
+     *   needs persisted state and the device's safety floor). When true it is the FIRST step and
+     *   the only one: a hard block with no delay, no budget arithmetic and no rule consulted, so it
+     *   overrides every mode and every limit rather than competing with them. Grants (passthrough,
+     *   the daily pass, a cooldown) are not inputs here at all; the service skips all three for a
+     *   nuked app before it asks. See `docs/architecture/nuke-mode.md`.
      *
      * [BlockMode.NONE] deliberately matches none of the block branches below, so a rule carrying
      * it yields Allow. It still participates in the time-budget check, which keys off
@@ -32,8 +40,14 @@ class BlockEngine @Inject constructor(
         activeRules: List<ActiveRule>,
         dailyUsageMs: Long,
         detectedFeature: String? = null,
-        includeWholeAppRulesForFeature: Boolean = true
+        includeWholeAppRulesForFeature: Boolean = true,
+        nuked: Boolean = false
     ): BlockDecision {
+        if (nuked) {
+            logger.i("block package=$packageName reason=nuke")
+            return NUKE_DECISION
+        }
+
         logger.d(
             "evaluate package=$packageName rules=${activeRules.size} " +
                 "dailyUsageMs=$dailyUsageMs detectedFeature=$detectedFeature " +
@@ -130,7 +144,23 @@ class BlockEngine @Inject constructor(
         return BlockDecision.Allow
     }
 
-    private companion object {
+    companion object {
+        /** What the overlay's rule footer and the logs call a Nuke block. */
+        const val NUKE_RULE_NAME = "Nuke"
+
+        /**
+         * The one decision Nuke produces. A HARD_BLOCK (so every consumer that already understands a
+         * hard block -- stats, the walk-away row, `enforceExhaustedBudget` -- handles it unchanged)
+         * flagged [BlockDecision.Block.nuke] so the overlay can drop the daily pass and say why.
+         * No grayscale, no daily-limit fields, no tab cover: Nuke is not a rule and carries none of
+         * a rule's options.
+         */
+        val NUKE_DECISION = BlockDecision.Block(
+            mode = BlockMode.HARD_BLOCK,
+            ruleName = NUKE_RULE_NAME,
+            nuke = true
+        )
+
         /**
          * The modes that gate an app behind a duration, in the order a tie is broken when several
          * matching rules are active at once.
