@@ -312,13 +312,11 @@ class TabCoverOverlayManager @Inject constructor(
         // Nudge IS an accessibility-service app, so an unlabelled opaque region over someone's nav
         // bar is the wrong end of that. A TalkBack user sweeping the bottom nav gets told what the
         // gap is and who put it there. The feature word comes from the caller, never from here.
-        view.contentDescription = describeCover(label)
+        val strings = androidx.core.content.ContextCompat.getContextForLanguage(view.context).resources
+        view.contentDescription = if (label.isBlank()) strings.getString(com.astraedus.nudge.R.string.cover_blocked)
+            else strings.getString(com.astraedus.nudge.R.string.cover_feature_blocked, label)
         view.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
     }
-
-    /** Never empty: an unlabelled region is the thing this exists to avoid. */
-    private fun describeCover(label: String): String =
-        if (label.isBlank()) "Blocked by Nudge" else "$label blocked by Nudge"
 
     /**
      * Run [block] on the main thread, or inline when it is already there (or when there is no Looper

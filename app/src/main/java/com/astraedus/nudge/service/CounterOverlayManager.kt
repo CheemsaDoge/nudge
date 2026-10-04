@@ -1,5 +1,9 @@
 package com.astraedus.nudge.service
 
+import com.astraedus.nudge.R
+import com.astraedus.nudge.ui.localization.builtInCopy
+import com.astraedus.nudge.ui.localization.durationLabel
+
 import android.content.Context
 import android.graphics.Color
 import android.graphics.PixelFormat
@@ -90,7 +94,7 @@ class CounterOverlayManager @Inject constructor(
     override fun updateCount(sessionCount: Int, dailyTotal: Int) {
         if (!isShowing) return
         counterText?.text = sessionCount.toString()
-        dailyText?.text = "today: $dailyTotal"
+        dailyText?.text = localizedResources().getString(R.string.counter_today, dailyTotal)
 
         val counterColor = when {
             sessionCount >= 30 -> Color.argb(220, 255, 0, 0)
@@ -114,7 +118,7 @@ class CounterOverlayManager @Inject constructor(
         // corrected" look identical from the outside otherwise -- which is exactly how the stale
         // "shorts" survived a QA pass.
         logger.d("counter overlay label updated to $label")
-        labelText?.text = label
+        labelText?.text = localizedResources().builtInCopy(label)
     }
 
     override fun hide() {
@@ -169,7 +173,7 @@ class CounterOverlayManager @Inject constructor(
         container.addView(counterText)
 
         labelText = AwarenessOverlayWindow.Label(ctx).apply {
-            text = label
+            text = localizedResources().builtInCopy(label)
             setTextColor(Color.argb(200, 255, 255, 255))
             textSize = 16f
             gravity = Gravity.CENTER
@@ -177,7 +181,7 @@ class CounterOverlayManager @Inject constructor(
         container.addView(labelText)
 
         dailyText = AwarenessOverlayWindow.Label(ctx).apply {
-            text = "today: 0"
+            text = localizedResources().getString(R.string.counter_today, 0)
             setTextColor(Color.argb(150, 255, 255, 255))
             textSize = 13f
             gravity = Gravity.CENTER
@@ -186,6 +190,9 @@ class CounterOverlayManager @Inject constructor(
 
         return container
     }
+
+    private fun localizedResources() =
+        androidx.core.content.ContextCompat.getContextForLanguage(serviceContext ?: appContext).resources
 
     companion object {
         fun formatCompactDuration(ms: Long): String {

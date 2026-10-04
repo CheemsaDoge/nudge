@@ -54,6 +54,9 @@ data class StatsUiState(
     val hasUsagePermission: Boolean = true,
     val isToday: Boolean = true,
     val dateLabel: String = "Today",
+    val selectedDate: LocalDate? = null,
+    val rangeStart: LocalDate? = null,
+    val rangeEnd: LocalDate? = null,
     /** Which of the 7 bars is the selected day. Drives chart highlighting. */
     val selectedDayIndex: Int = StatsDaySelection.WINDOW_DAYS - 1,
     /** "Last 7 days", or explicit dates once the user scrolls back. */
@@ -219,6 +222,9 @@ class StatsViewModel @Inject constructor(
             hasUsagePermission = hasPermission,
             isToday = isToday,
             dateLabel = StatsDateLabels.day(selection.selected, today),
+            selectedDate = selection.selected,
+            rangeStart = loadedWeekStart,
+            rangeEnd = loadedWeekEnd,
             selectedDayIndex = selection.selectedIndex,
             weekRangeLabel = StatsDateLabels.range(loadedWeekStart, loadedWeekEnd, today),
             canGoForward = selection.canGoForward(today),

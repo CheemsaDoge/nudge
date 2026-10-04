@@ -1,5 +1,9 @@
 package com.astraedus.nudge.ui.screens.stats.charts
 
+import com.astraedus.nudge.ui.localization.*
+
+import com.astraedus.nudge.R
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -43,6 +47,7 @@ fun HourlyHeatmap(
         }
     }
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     val primaryColor = MaterialTheme.colorScheme.primary
     val surfaceVariantColor = MaterialTheme.colorScheme.surfaceVariant
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
@@ -64,7 +69,7 @@ fun HourlyHeatmap(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    "No usage recorded today",
+                    strings.getString(R.string.ui_no_usage_recorded_today),
                     style = MaterialTheme.typography.bodySmall,
                     color = onSurfaceVariant
                 )
@@ -72,9 +77,9 @@ fun HourlyHeatmap(
         } else {
             if (selectedIndex != null) {
                 val ms = hourlyMs.getOrElse(selectedIndex!!) { 0L }
-                val hourLabel = formatHourLabel(selectedIndex!!)
+                val hourLabel = strings.hourLabel(selectedIndex!!)
                 Text(
-                    "$hourLabel: ${formatDuration(ms)}",
+                    "$hourLabel: ${strings.durationLabel(formatDuration(ms))}",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.primary,
@@ -144,11 +149,11 @@ fun HourlyHeatmap(
                     .padding(top = 2.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("12am", style = MaterialTheme.typography.labelSmall, color = onSurfaceVariant, fontSize = 9.sp)
-                Text("6am", style = MaterialTheme.typography.labelSmall, color = onSurfaceVariant, fontSize = 9.sp)
-                Text("12pm", style = MaterialTheme.typography.labelSmall, color = onSurfaceVariant, fontSize = 9.sp)
-                Text("6pm", style = MaterialTheme.typography.labelSmall, color = onSurfaceVariant, fontSize = 9.sp)
-                Text("12am", style = MaterialTheme.typography.labelSmall, color = onSurfaceVariant, fontSize = 9.sp)
+                Text(strings.getString(R.string.ui_12am), style = MaterialTheme.typography.labelSmall, color = onSurfaceVariant, fontSize = 9.sp)
+                Text(strings.getString(R.string.ui_6am), style = MaterialTheme.typography.labelSmall, color = onSurfaceVariant, fontSize = 9.sp)
+                Text(strings.getString(R.string.ui_12pm), style = MaterialTheme.typography.labelSmall, color = onSurfaceVariant, fontSize = 9.sp)
+                Text(strings.getString(R.string.ui_6pm), style = MaterialTheme.typography.labelSmall, color = onSurfaceVariant, fontSize = 9.sp)
+                Text(strings.getString(R.string.ui_12am), style = MaterialTheme.typography.labelSmall, color = onSurfaceVariant, fontSize = 9.sp)
             }
         }
     }

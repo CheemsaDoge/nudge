@@ -1,5 +1,8 @@
 package com.astraedus.nudge.ui.overlay
 
+import com.astraedus.nudge.ui.localization.durationLabel
+import com.astraedus.nudge.R
+
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
@@ -47,15 +50,16 @@ fun BreathingContent(
     appLabel: String? = null,
     dailyTimeRemainingMs: Long? = null,
     dailyLimitMinutes: Int? = null,
-    subtitlePool: List<String> = NudgeMessages.delaySubtitles,
+    subtitlePool: List<String>? = null,
     canUseEmergencyPass: Boolean = false,
     emergencyLocked: Boolean = false,
     nextPassMs: Long = 0L,
     onUseEmergencyPass: () -> Unit = {}
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     // Unkeyed by design: BlockOverlayActivity composes this subtree under a per-delivery key, so a
     // re-delivered block already gets fresh state (issue #15).
-    val subtitle = remember { subtitlePool.random() }
+    val subtitle = remember(subtitlePool) { (subtitlePool ?: strings.getStringArray(R.array.delay_subtitles).toList()).random() }
     val circleScale = remember { Animatable(0.6f) }
     var isInhaling by remember { mutableStateOf(true) }
     var overallProgress by remember { mutableFloatStateOf(0f) }
@@ -149,7 +153,7 @@ fun BreathingContent(
                 )
                 if (dailyTimeRemainingMs != null && dailyLimitMinutes != null && dailyLimitMinutes > 0) {
                     Text(
-                        text = "${formatDuration(dailyTimeRemainingMs)} left today",
+                        text = strings.getString(R.string.ui_left_today, strings.durationLabel(formatDuration(dailyTimeRemainingMs))),
                         style = MaterialTheme.typography.bodyMedium,
                         color = timeRemainingColor(dailyTimeRemainingMs, dailyLimitMinutes)
                     )
@@ -158,7 +162,7 @@ fun BreathingContent(
             }
 
             Text(
-                text = if (isInhaling) "Breathe in..." else "Breathe out...",
+                text = if (isInhaling) strings.getString(R.string.ui_breathe_in) else strings.getString(R.string.ui_breathe_out),
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center
@@ -216,7 +220,7 @@ fun BreathingContent(
 
             val remainingSeconds = ((1f - overallProgress) * delaySeconds).toInt()
             Text(
-                text = "${remainingSeconds}s remaining",
+                text = strings.getString(R.string.ui_s_remaining, remainingSeconds),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline
             )
@@ -224,7 +228,7 @@ fun BreathingContent(
             Spacer(modifier = Modifier.height(48.dp))
 
             OutlinedButton(onClick = onCancel) {
-                Text("I changed my mind")
+                Text(strings.getString(R.string.ui_i_changed_my_mind))
             }
 
             EmergencyPassAction(
@@ -237,7 +241,7 @@ fun BreathingContent(
             if (ruleName != null) {
                 Spacer(modifier = Modifier.height(24.dp))
                 Text(
-                    text = "Rule: $ruleName",
+                    text = strings.getString(R.string.ui_rule, ruleName),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
                     textAlign = TextAlign.Center

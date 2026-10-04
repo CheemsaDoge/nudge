@@ -1,5 +1,7 @@
 package com.astraedus.nudge.ui.widget
 
+import com.astraedus.nudge.ui.localization.*
+
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.DpSize
@@ -73,7 +75,7 @@ class TodayWidget : GlanceAppWidget() {
 
 @Composable
 private fun TodayContent(snapshot: WidgetSnapshot.Today) {
-    val context = LocalContext.current
+    val context = androidx.core.content.ContextCompat.getContextForLanguage(LocalContext.current)
     val wide = LocalSize.current.width >= WIDE_THRESHOLD
 
     Column(
@@ -88,7 +90,7 @@ private fun TodayContent(snapshot: WidgetSnapshot.Today) {
         if (wide) {
             Row(modifier = GlanceModifier.fillMaxWidth()) {
                 Metric(
-                    value = snapshot.screenTime,
+                    value = context.resources.durationLabel(snapshot.screenTime),
                     label = context.getString(R.string.widget_today_screen_time),
                     modifier = GlanceModifier.defaultWeight()
                 )
@@ -108,7 +110,7 @@ private fun TodayContent(snapshot: WidgetSnapshot.Today) {
                 text = context.getString(R.string.widget_today_title),
                 style = labelStyle()
             )
-            Text(text = snapshot.screenTime, style = heroStyle(), maxLines = 1)
+            Text(text = context.resources.durationLabel(snapshot.screenTime), style = heroStyle(), maxLines = 1)
             Spacer(modifier = GlanceModifier.height(6.dp))
             // One line rather than two stacked metrics: at 2x2 there is room for one more row of
             // text, and two numbers with their own labels would each be too small to read.

@@ -1,5 +1,7 @@
 package com.astraedus.nudge.ui.components
 
+import com.astraedus.nudge.R
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,6 +35,7 @@ fun CustomTimeDialog(
     onConfirm: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     var text by remember { mutableStateOf(currentValue.toString()) }
     val parsed = text.toIntOrNull()
     val isValid = parsed != null && parsed in min..max
@@ -51,7 +54,7 @@ fun CustomTimeDialog(
                             text = newValue
                         }
                     },
-                    label = { Text("Value ($unit)") },
+                    label = { Text(strings.getString(R.string.ui_value, unit)) },
                     placeholder = { Text("$min-$max") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
@@ -61,7 +64,7 @@ fun CustomTimeDialog(
                 if (showError) {
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "Enter a number between $min and $max",
+                        strings.getString(R.string.ui_enter_a_number_between_and, min, max),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error
                     )
@@ -77,12 +80,12 @@ fun CustomTimeDialog(
                 },
                 enabled = isValid
             ) {
-                Text("Set")
+                Text(strings.getString(R.string.ui_set))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(strings.getString(R.string.ui_cancel))
             }
         }
     )

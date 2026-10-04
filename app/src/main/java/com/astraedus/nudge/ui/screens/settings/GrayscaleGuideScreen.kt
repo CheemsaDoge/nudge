@@ -1,5 +1,7 @@
 package com.astraedus.nudge.ui.screens.settings
 
+import com.astraedus.nudge.R
+
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -48,6 +50,7 @@ import kotlinx.coroutines.launch
 fun GrayscaleGuideScreen(
     onNavigateBack: () -> Unit
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     val context = LocalContext.current
     val permissionGranted by remember { mutableStateOf(hasGrayscalePermission(context)) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -56,10 +59,10 @@ fun GrayscaleGuideScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Grayscale Mode Setup") },
+                title = { Text(strings.getString(R.string.ui_grayscale_mode_setup)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.getString(R.string.ui_back))
                     }
                 }
             )
@@ -85,34 +88,32 @@ fun GrayscaleGuideScreen(
             } else {
                 // Explanation
                 Text(
-                    "Grayscale mode makes your phone screen black-and-white when blocked apps " +
-                        "are open, making them less appealing.",
+                    strings.getString(R.string.ui_grayscale_mode_makes_your_phone_screen_black_and_white_when_blocked_ap),
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text(
-                    "This requires a one-time setup because Android restricts apps from " +
-                        "changing display settings directly.",
+                    strings.getString(R.string.ui_this_requires_a_one_time_setup_because_android_restricts_apps_from_cha),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 // Option 1: Wireless
-                SectionHeader("Option 1: Wireless (Android 11+, no computer needed)")
+                SectionHeader(strings.getString(R.string.ui_option_1_wireless_android_11_no_computer_needed))
 
-                NumberedStep(1, "Go to Settings > About Phone > tap \"Build number\" 7 times to enable Developer Options")
-                NumberedStep(2, "Go to Settings > Developer Options > enable \"Wireless debugging\"")
-                NumberedStep(3, "Tap \"Pair device with pairing code\" and note the pairing code and port")
-                NumberedStep(4, "Open a terminal app (like Termux) and run the pairing command:")
+                NumberedStep(1, strings.getString(R.string.ui_go_to_settings_about_phone_tap_build_number_7_times_to_enable_develope))
+                NumberedStep(2, strings.getString(R.string.ui_go_to_settings_developer_options_enable_wireless_debugging))
+                NumberedStep(3, strings.getString(R.string.ui_tap_pair_device_with_pairing_code_and_note_the_pairing_code_and_port))
+                NumberedStep(4, strings.getString(R.string.ui_open_a_terminal_app_like_termux_and_run_the_pairing_command))
 
                 AdbCommandCard(
                     command = "adb pair <ip>:<port>",
-                    label = "Then enter the pairing code when prompted",
+                    label = strings.getString(R.string.ui_then_enter_the_pairing_code_when_prompted),
                     snackbarHostState = snackbarHostState,
                     scope = scope,
                     context = context
                 )
 
-                NumberedStep(5, "Then run this command to grant the permission:")
+                NumberedStep(5, strings.getString(R.string.ui_then_run_this_command_to_grant_the_permission))
 
                 AdbCommandCard(
                     command = "adb shell pm grant com.astraedus.nudge android.permission.WRITE_SECURE_SETTINGS",
@@ -124,12 +125,12 @@ fun GrayscaleGuideScreen(
                 Spacer(Modifier.height(8.dp))
 
                 // Option 2: With a Computer
-                SectionHeader("Option 2: With a Computer")
+                SectionHeader(strings.getString(R.string.ui_option_2_with_a_computer))
 
-                NumberedStep(1, "Install ADB on your computer (search \"install adb\" for your OS)")
-                NumberedStep(2, "Enable USB Debugging on your phone (Settings > Developer Options > USB Debugging)")
-                NumberedStep(3, "Connect your phone via USB")
-                NumberedStep(4, "Run this command on your computer:")
+                NumberedStep(1, strings.getString(R.string.ui_install_adb_on_your_computer_search_install_adb_for_your_os))
+                NumberedStep(2, strings.getString(R.string.ui_enable_usb_debugging_on_your_phone_settings_developer_options_usb_debu))
+                NumberedStep(3, strings.getString(R.string.ui_connect_your_phone_via_usb))
+                NumberedStep(4, strings.getString(R.string.ui_run_this_command_on_your_computer))
 
                 AdbCommandCard(
                     command = "adb shell pm grant com.astraedus.nudge android.permission.WRITE_SECURE_SETTINGS",
@@ -141,7 +142,7 @@ fun GrayscaleGuideScreen(
                 Spacer(Modifier.height(8.dp))
 
                 Text(
-                    "That's it! One-time setup. Grayscale will work automatically after this.",
+                    strings.getString(R.string.ui_that_s_it_one_time_setup_grayscale_will_work_automatically_after_this),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.primary
@@ -155,6 +156,7 @@ fun GrayscaleGuideScreen(
 
 @Composable
 private fun PermissionStatusCard(granted: Boolean) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -180,26 +182,26 @@ private fun PermissionStatusCard(granted: Boolean) {
                 )
                 Column {
                     Text(
-                        "Permission Granted",
+                        strings.getString(R.string.ui_permission_granted),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Medium,
                         color = Color(0xFF4CAF50)
                     )
                     Text(
-                        "Grayscale mode is ready to use. Enable it per-app in rule settings.",
+                        strings.getString(R.string.ui_grayscale_mode_is_ready_to_use_enable_it_per_app_in_rule_settings),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             } else {
                 Text(
-                    "Not Granted",
+                    strings.getString(R.string.ui_not_granted),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.error
                 )
                 Text(
-                    "Follow the guide below to enable grayscale.",
+                    strings.getString(R.string.ui_follow_the_guide_below_to_enable_grayscale),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f)
@@ -248,6 +250,7 @@ private fun AdbCommandCard(
     scope: kotlinx.coroutines.CoroutineScope,
     context: Context
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -268,14 +271,14 @@ private fun AdbCommandCard(
             )
             IconButton(onClick = {
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                clipboard.setPrimaryClip(ClipData.newPlainText("ADB command", command))
+                clipboard.setPrimaryClip(ClipData.newPlainText(strings.getString(R.string.ui_adb_command), command))
                 scope.launch {
-                    snackbarHostState.showSnackbar("Copied to clipboard")
+                    snackbarHostState.showSnackbar(strings.getString(R.string.ui_copied_to_clipboard))
                 }
             }) {
                 Icon(
                     Icons.Outlined.ContentCopy,
-                    contentDescription = "Copy command",
+                    contentDescription = strings.getString(R.string.ui_copy_command),
                     tint = MaterialTheme.colorScheme.primary
                 )
             }

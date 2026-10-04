@@ -1,5 +1,7 @@
 package com.astraedus.nudge.ui.screens.settings
 
+import com.astraedus.nudge.R
+
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -52,6 +54,7 @@ import kotlinx.coroutines.launch
 fun MessagesEditorScreen(
     onNavigateBack: () -> Unit
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     val context = LocalContext.current
     val preferences = remember { NudgePreferences(context.applicationContext) }
     val scope = rememberCoroutineScope()
@@ -75,10 +78,10 @@ fun MessagesEditorScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Block Messages") },
+                title = { Text(strings.getString(R.string.ui_block_messages)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.getString(R.string.ui_back))
                     }
                 }
             )
@@ -94,8 +97,7 @@ fun MessagesEditorScreen(
             Spacer(Modifier.height(8.dp))
 
             Text(
-                "Customize the messages shown when an app is blocked or delayed. " +
-                    "One message per line — a random one is picked each time.",
+                strings.getString(R.string.ui_customize_the_messages_shown_when_an_app_is_blocked_or_delayed_one_mes),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -103,7 +105,7 @@ fun MessagesEditorScreen(
             Spacer(Modifier.height(16.dp))
 
             MessageField(
-                label = "Delay title",
+                label = strings.getString(R.string.ui_delay_title),
                 value = titles ?: "",
                 onValueChange = { titles = it },
                 onReset = {
@@ -113,7 +115,7 @@ fun MessagesEditorScreen(
             )
 
             MessageField(
-                label = "Delay subtitle",
+                label = strings.getString(R.string.ui_delay_subtitle),
                 value = subtitles ?: "",
                 onValueChange = { subtitles = it },
                 onReset = {
@@ -123,7 +125,7 @@ fun MessagesEditorScreen(
             )
 
             MessageField(
-                label = "Hard-block message",
+                label = strings.getString(R.string.ui_hard_block_message),
                 value = hardBlock ?: "",
                 onValueChange = { hardBlock = it },
                 onReset = {
@@ -140,12 +142,12 @@ fun MessagesEditorScreen(
                         preferences.setCustomDelayTitles(titles ?: "")
                         preferences.setCustomDelaySubtitles(subtitles ?: "")
                         preferences.setCustomHardBlockMessages(hardBlock ?: "")
-                        Toast.makeText(context, "Messages saved", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, strings.getString(R.string.ui_messages_saved), Toast.LENGTH_SHORT).show()
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Save")
+                Text(strings.getString(R.string.ui_save))
             }
 
             Spacer(Modifier.height(24.dp))
@@ -160,6 +162,7 @@ private fun MessageField(
     onValueChange: (String) -> Unit,
     onReset: () -> Unit
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -172,7 +175,7 @@ private fun MessageField(
             color = MaterialTheme.colorScheme.primary
         )
         TextButton(onClick = onReset) {
-            Text("Reset to defaults")
+            Text(strings.getString(R.string.ui_reset_to_defaults))
         }
     }
 
@@ -182,7 +185,7 @@ private fun MessageField(
         modifier = Modifier.fillMaxWidth(),
         minLines = 3,
         supportingText = {
-            Text("One message per line. Leave empty to use the defaults.")
+            Text(strings.getString(R.string.ui_one_message_per_line_leave_empty_to_use_the_defaults))
         }
     )
 

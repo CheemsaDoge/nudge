@@ -1,5 +1,8 @@
 package com.astraedus.nudge.ui.overlay
 
+import com.astraedus.nudge.ui.localization.durationLabel
+import com.astraedus.nudge.R
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
@@ -42,15 +45,16 @@ fun DelayContent(
     appLabel: String? = null,
     dailyTimeRemainingMs: Long? = null,
     dailyLimitMinutes: Int? = null,
-    titlePool: List<String> = NudgeMessages.delayTitles,
-    subtitlePool: List<String> = NudgeMessages.delaySubtitles,
+    titlePool: List<String>? = null,
+    subtitlePool: List<String>? = null,
     canUseEmergencyPass: Boolean = false,
     emergencyLocked: Boolean = false,
     nextPassMs: Long = 0L,
     onUseEmergencyPass: () -> Unit = {}
 ) {
-    val title = remember { titlePool.random() }
-    val subtitle = remember { subtitlePool.random() }
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
+    val title = remember(titlePool) { (titlePool ?: strings.getStringArray(R.array.delay_titles).toList()).random() }
+    val subtitle = remember(subtitlePool) { (subtitlePool ?: strings.getStringArray(R.array.delay_subtitles).toList()).random() }
     // Unkeyed by design: BlockOverlayActivity composes this subtree under a per-delivery key, so a
     // new block already gets fresh state (issue #15). Keying here on delaySeconds would look like a
     // fix but miss the common case — two apps both on the default 15s delay would still share it.
@@ -111,7 +115,7 @@ fun DelayContent(
                 )
                 if (dailyTimeRemainingMs != null && dailyLimitMinutes != null && dailyLimitMinutes > 0) {
                     Text(
-                        text = "${formatDuration(dailyTimeRemainingMs)} left today",
+                        text = strings.getString(R.string.ui_left_today, strings.durationLabel(formatDuration(dailyTimeRemainingMs))),
                         style = MaterialTheme.typography.bodyMedium,
                         color = timeRemainingColor(dailyTimeRemainingMs, dailyLimitMinutes)
                     )
@@ -159,7 +163,7 @@ fun DelayContent(
             Spacer(modifier = Modifier.height(48.dp))
 
             OutlinedButton(onClick = onCancel) {
-                Text("I changed my mind")
+                Text(strings.getString(R.string.ui_i_changed_my_mind))
             }
 
             EmergencyPassAction(
@@ -172,7 +176,7 @@ fun DelayContent(
             if (ruleName != null) {
                 Spacer(modifier = Modifier.height(24.dp))
                 Text(
-                    text = "Rule: $ruleName",
+                    text = strings.getString(R.string.ui_rule, ruleName),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
                     textAlign = TextAlign.Center

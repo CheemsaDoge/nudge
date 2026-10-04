@@ -1,5 +1,9 @@
 package com.astraedus.nudge.ui.components
 
+import com.astraedus.nudge.ui.localization.builtInCopy
+
+import com.astraedus.nudge.R
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -82,6 +86,7 @@ fun ChallengeDialog(
     title: String = "Strict Mode locked",
     confirmLabel: String = "Unlock"
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     val focusManager = LocalFocusManager.current
     var input by remember(target) { mutableStateOf("") }
     // Counter and match both measure dash-stripped characters via the same helper, so the
@@ -94,13 +99,13 @@ fun ChallengeDialog(
     AlertDialog(
         onDismissRequest = onCancel,
         icon = { Icon(Icons.Outlined.Lock, contentDescription = null) },
-        title = { Text(title) },
+        title = { Text(strings.builtInCopy(title)) },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState())
             ) {
                 Text(
-                    prompt,
+                    strings.builtInCopy(prompt),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -108,7 +113,7 @@ fun ChallengeDialog(
                 Text(
                     // Dashes are display-only grouping; input is dash-insensitive (typing
                     // with OR without the dashes both pass), so we must NOT claim "exactly".
-                    "Type the code to continue:",
+                    strings.getString(R.string.ui_type_the_code_to_continue),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -132,7 +137,7 @@ fun ChallengeDialog(
                         value = input,
                         onValueChange = { input = it },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Unlock code") },
+                        label = { Text(strings.getString(R.string.ui_unlock_code)) },
                         singleLine = false,
                         isError = input.isNotEmpty() && !matches && typedLength >= rawLength,
                         textStyle = TextStyle(fontFamily = FontFamily.Monospace),
@@ -158,7 +163,7 @@ fun ChallengeDialog(
                     )
                     if (input.isNotEmpty() && !matches && typedLength >= rawLength) {
                         Text(
-                            "Doesn't match",
+                            strings.getString(R.string.ui_doesn_t_match),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.error
                         )
@@ -171,12 +176,12 @@ fun ChallengeDialog(
                 onClick = { onUnlock(input) },
                 enabled = matches
             ) {
-                Text(confirmLabel)
+                Text(strings.builtInCopy(confirmLabel))
             }
         },
         dismissButton = {
             TextButton(onClick = onCancel) {
-                Text("I changed my mind")
+                Text(strings.getString(R.string.ui_i_changed_my_mind))
             }
         }
     )

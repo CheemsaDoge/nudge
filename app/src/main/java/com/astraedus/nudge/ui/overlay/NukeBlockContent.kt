@@ -1,5 +1,7 @@
 package com.astraedus.nudge.ui.overlay
 
+import com.astraedus.nudge.R
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -39,7 +41,8 @@ fun NukeBlockContent(
     appLabel: String?,
     onGoHome: () -> Unit
 ) {
-    val name = appLabel ?: "This app"
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
+    val name = appLabel ?: strings.getString(R.string.ui_this_app)
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
@@ -63,7 +66,7 @@ fun NukeBlockContent(
             Spacer(Modifier.height(24.dp))
 
             Text(
-                text = "Nuked.",
+                text = strings.getString(R.string.ui_nuked),
                 style = MaterialTheme.typography.headlineLarge,
                 color = MaterialTheme.colorScheme.onBackground
             )
@@ -71,7 +74,7 @@ fun NukeBlockContent(
             Spacer(Modifier.height(12.dp))
 
             Text(
-                text = "$name is off until you end Nuke. Scan your Nuke code to end it.",
+                text = strings.getString(R.string.ui_is_off_until_you_end_nuke_scan_your_nuke_code_to_end_it, name),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -89,7 +92,7 @@ fun NukeBlockContent(
             Spacer(Modifier.height(48.dp))
 
             Button(onClick = onGoHome) {
-                Text("Go home")
+                Text(strings.getString(R.string.ui_go_home))
             }
         }
     }

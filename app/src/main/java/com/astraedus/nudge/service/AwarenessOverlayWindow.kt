@@ -2,7 +2,7 @@ package com.astraedus.nudge.service
 
 import android.content.Context
 import android.widget.LinearLayout
-import android.widget.TextView
+import androidx.appcompat.widget.AppCompatTextView
 
 /**
  * The one accessibility IDENTITY Nudge's awareness overlays wear — the interaction counter and the
@@ -56,7 +56,7 @@ object AwarenessOverlayWindow {
     }
 
     /** Any text inside an awareness overlay, including one that is the whole overlay. */
-    class Label(context: Context) : TextView(context) {
+    class Label(context: Context) : AppCompatTextView(context) {
         override fun getAccessibilityClassName(): CharSequence = CLASS_NAME
     }
 }

@@ -1,5 +1,7 @@
 package com.astraedus.nudge.ui.overlay
 
+import com.astraedus.nudge.R
+
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -83,6 +85,7 @@ fun HoldTarget(
     onHoldComplete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     // Keyed on the duration so a rule edit (or, later, a per-rule override) cannot leave a machine
     // measuring against the old length.
     val progress = remember(holdDurationMs) { HoldProgress(holdDurationMs) }
@@ -189,9 +192,8 @@ fun HoldTarget(
                 // number and a word.
                 .semantics(mergeDescendants = true) {
                     role = Role.Button
-                    contentDescription = "Hold to open. Press and hold for $totalSeconds seconds. " +
-                        "Let go and it starts over."
-                    onClick(label = "Open after $totalSeconds seconds") {
+                    contentDescription = strings.getString(R.string.ui_hold_to_open_press_and_hold_for_seconds_let_go_and_it_starts_over, totalSeconds)
+                    onClick(label = strings.getString(R.string.ui_open_after_seconds, totalSeconds)) {
                         accessibilityHold = true
                         true
                     }
@@ -235,7 +237,7 @@ fun HoldTarget(
                     color = faceContentColor
                 )
                 Text(
-                    text = if (holding) "KEEP HOLDING" else "HOLD",
+                    text = if (holding) strings.getString(R.string.ui_keep_holding) else strings.getString(R.string.mode_hold),
                     style = MaterialTheme.typography.labelLarge.copy(
                         fontWeight = FontWeight.SemiBold,
                         letterSpacing = 2.sp
@@ -248,7 +250,7 @@ fun HoldTarget(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "Hold to open. Let go and it starts over.",
+            text = strings.getString(R.string.ui_hold_to_open_let_go_and_it_starts_over),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center

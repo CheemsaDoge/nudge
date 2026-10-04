@@ -1,5 +1,10 @@
 package com.astraedus.nudge.ui.screens.stats
 
+import androidx.compose.ui.platform.LocalContext
+import com.astraedus.nudge.ui.localization.*
+
+import com.astraedus.nudge.R
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -50,16 +55,17 @@ fun InterventionsScreen(
     viewModel: InterventionsViewModel,
     onNavigateBack: () -> Unit
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val calculator = viewModel.calculator
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Interventions") },
+                title = { Text(strings.getString(R.string.ui_interventions)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.getString(R.string.ui_back))
                     }
                 }
             )
@@ -88,23 +94,23 @@ fun InterventionsScreen(
 
             item {
                 InsightSection(
-                    title = "Temptation Clock",
-                    subtitle = "When you're most likely to hit a block"
+                    title = strings.getString(R.string.ui_temptation_clock),
+                    subtitle = strings.getString(R.string.ui_when_you_re_most_likely_to_hit_a_block)
                 ) {
                     val hourlyBars = remember(state.insights.hourly) {
-                        buildHourlyBars(state.insights.hourly, calculator)
+                        buildHourlyBars(state.insights.hourly, calculator, strings)
                     }
                     RateBarChart(
                         bars = hourlyBars,
                         modifier = Modifier.padding(horizontal = 4.dp),
-                        emptyMessage = "No blocks yet in this period"
+                        emptyMessage = strings.getString(R.string.ui_no_blocks_yet_in_this_period)
                     )
                     // With no data the chart states it; a second identical line under it
                     // would just read as a rendering glitch.
                     state.insights.peakHour?.let { peakHour ->
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            text = "Your danger hour is ${calculator.hourLabel(peakHour)}",
+                            text = strings.getString(R.string.ui_your_danger_hour_is, strings.hourLabel(peakHour)),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -114,21 +120,21 @@ fun InterventionsScreen(
 
             item {
                 InsightSection(
-                    title = "Day of Week",
-                    subtitle = "Which days test your willpower most"
+                    title = strings.getString(R.string.ui_day_of_week),
+                    subtitle = strings.getString(R.string.ui_which_days_test_your_willpower_most)
                 ) {
                     val weekdayBars = remember(state.insights.weekday) {
-                        buildWeekdayBars(state.insights.weekday, calculator)
+                        buildWeekdayBars(state.insights.weekday, calculator, strings)
                     }
                     RateBarChart(
                         bars = weekdayBars,
                         modifier = Modifier.padding(horizontal = 4.dp),
-                        emptyMessage = "No blocks yet in this period"
+                        emptyMessage = strings.getString(R.string.ui_no_blocks_yet_in_this_period)
                     )
                     state.insights.peakWeekday?.let { peakWeekday ->
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            text = "Toughest day: ${calculator.weekdayFullLabel(peakWeekday)}",
+                            text = strings.getString(R.string.ui_toughest_day, strings.weekdayLabel(peakWeekday, full = true)),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -138,11 +144,11 @@ fun InterventionsScreen(
 
             item {
                 InsightSection(
-                    title = "Top Blocked Apps",
-                    subtitle = "Which apps trigger the most interventions, and how"
+                    title = strings.getString(R.string.ui_top_blocked_apps),
+                    subtitle = strings.getString(R.string.ui_which_apps_trigger_the_most_interventions_and_how)
                 ) {
                     if (state.apps.isEmpty()) {
-                        InsightEmptyState("No blocks yet in this period")
+                        InsightEmptyState(strings.getString(R.string.ui_no_blocks_yet_in_this_period))
                     } else {
                         // Only legend the modes actually present, so a user who never used
                         // breathing mode is not shown a swatch for it.
@@ -165,8 +171,8 @@ fun InterventionsScreen(
 
             item {
                 InsightSection(
-                    title = "Temptation Fingerprint",
-                    subtitle = "Darker means more blocks at that hour."
+                    title = strings.getString(R.string.ui_temptation_fingerprint),
+                    subtitle = strings.getString(R.string.ui_darker_means_more_blocks_at_that_hour)
                 ) {
                     WeekHourHeatmap(
                         grid = state.insights.heatmap,
@@ -182,6 +188,7 @@ fun InterventionsScreen(
 
 @Composable
 private fun HeroTotalsCard(state: InterventionsUiState, modifier: Modifier = Modifier) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -198,10 +205,10 @@ private fun HeroTotalsCard(state: InterventionsUiState, modifier: Modifier = Mod
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                HeroStat("Today", state.insights.todayTotal.toString())
-                HeroStat("7 days", state.insights.weekTotal.toString())
-                HeroStat("30 days", state.insights.monthTotal.toString())
-                HeroStat("All time", state.allTimeTotal.toString())
+                HeroStat(strings.getString(R.string.ui_today), state.insights.todayTotal.toString())
+                HeroStat(strings.getString(R.string.ui_7_days), state.insights.weekTotal.toString())
+                HeroStat(strings.getString(R.string.ui_30_days), state.insights.monthTotal.toString())
+                HeroStat(strings.getString(R.string.ui_all_time_2), state.allTimeTotal.toString())
             }
             Sparkline(values = state.dailyCounts, modifier = Modifier.fillMaxWidth())
         }
@@ -231,6 +238,7 @@ private fun ModeLegend(
     calculator: InsightsCalculator,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalContext.current.resources
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -247,7 +255,7 @@ private fun ModeLegend(
                         .background(modeColor(mode))
                 )
                 Text(
-                    calculator.modeLabel(mode),
+                    strings.builtInCopy(calculator.modeLabel(mode)),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -262,6 +270,7 @@ private fun InterventionAppRowItem(
     calculator: InsightsCalculator,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalContext.current.resources
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -276,14 +285,14 @@ private fun InterventionAppRowItem(
                 val bitmap = remember(icon) { icon.toBitmap(64, 64).asImageBitmap() }
                 Image(
                     bitmap = bitmap,
-                    contentDescription = row.label,
+                    contentDescription = if (row.packageName == "web") strings.getString(R.string.websites) else row.label,
                     modifier = Modifier.size(32.dp)
                 )
             } else {
                 Spacer(Modifier.size(32.dp))
             }
             Text(
-                row.label,
+                if (row.packageName == "web") strings.getString(R.string.websites) else row.label,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier.weight(1f)
@@ -306,7 +315,7 @@ private fun InterventionAppRowItem(
         )
         Text(
             presentModes.joinToString(" · ") { mode ->
-                "${calculator.modeLabel(mode)} ${row.byMode[mode] ?: 0}"
+                "${strings.builtInCopy(calculator.modeLabel(mode))} ${row.byMode[mode] ?: 0}"
             },
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -326,26 +335,26 @@ private fun modeColor(mode: String): Color = when (mode) {
     else -> MaterialTheme.colorScheme.surfaceVariant
 }
 
-private fun buildHourlyBars(hourly: List<Int>, calculator: InsightsCalculator): List<RateBar> {
+private fun buildHourlyBars(hourly: List<Int>, calculator: InsightsCalculator, strings: android.content.res.Resources): List<RateBar> {
     val max = hourly.maxOrNull() ?: 0
     return hourly.mapIndexed { hour, count ->
         RateBar(
-            label = if (hour % 6 == 0) calculator.hourLabel(hour) else "",
+            label = if (hour % 6 == 0) strings.hourLabel(hour) else "",
             fraction = if (max > 0) count.toFloat() / max.toFloat() else 0f,
             confidence = 1f,
-            readout = "${calculator.hourLabel(hour)}: $count blocks"
+            readout = strings.getString(R.string.weekday_blocks, strings.hourLabel(hour), count)
         )
     }
 }
 
-private fun buildWeekdayBars(weekday: List<Int>, calculator: InsightsCalculator): List<RateBar> {
+private fun buildWeekdayBars(weekday: List<Int>, calculator: InsightsCalculator, strings: android.content.res.Resources): List<RateBar> {
     val max = weekday.maxOrNull() ?: 0
     return weekday.mapIndexed { index, count ->
         RateBar(
-            label = calculator.weekdayLabel(index),
+            label = strings.weekdayLabel(index),
             fraction = if (max > 0) count.toFloat() / max.toFloat() else 0f,
             confidence = 1f,
-            readout = "${calculator.weekdayLabel(index)}: $count blocks"
+            readout = strings.getString(R.string.weekday_blocks, strings.weekdayLabel(index), count)
         )
     }
 }

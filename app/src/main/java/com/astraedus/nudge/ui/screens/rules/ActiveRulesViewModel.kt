@@ -24,7 +24,8 @@ data class ActiveRulesGroup(
     val appIcon: Drawable?,
     val enabled: Boolean,
     val summaryText: String,
-    val ruleCount: Int
+    val ruleCount: Int,
+    val sourceRules: List<BlockRule> = emptyList()
 )
 
 @Immutable
@@ -83,6 +84,7 @@ class ActiveRulesViewModel @Inject constructor(
                             appIcon = appIcon,
                             enabled = enabled,
                             summaryText = summaryText,
+                            sourceRules = pkgRules,
                             ruleCount = pkgRules.size
                         )
                     }

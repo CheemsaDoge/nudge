@@ -88,7 +88,7 @@ private val TALL_THRESHOLD = 150.dp
 
 @Composable
 private fun TopBlockedContent(read: WidgetReads.TopBlockedRead) {
-    val context = LocalContext.current
+    val context = androidx.core.content.ContextCompat.getContextForLanguage(LocalContext.current)
     val size = LocalSize.current
     val rows = if (size.height >= TALL_THRESHOLD) read.snapshot.apps else read.snapshot.apps.take(SHORT_ROWS)
 
@@ -153,7 +153,7 @@ private fun BlockedRow(
     icon: Bitmap?,
     barTrack: Dp
 ) {
-    val context = LocalContext.current
+    val context = androidx.core.content.ContextCompat.getContextForLanguage(LocalContext.current)
     // The row is the tap target for that app's detail screen. A package the deep link refuses to
     // route (see WidgetDeepLink) falls back to opening the app at Home rather than to a route
     // nobody can resolve.
@@ -169,7 +169,7 @@ private fun BlockedRow(
         if (icon != null) {
             Image(
                 provider = ImageProvider(icon),
-                contentDescription = app.label,
+                contentDescription = if (app.packageName == "web") context.getString(R.string.websites) else app.label,
                 contentScale = ContentScale.Fit,
                 modifier = GlanceModifier.size(ICON_SIZE)
             )
@@ -186,7 +186,7 @@ private fun BlockedRow(
         Spacer(modifier = GlanceModifier.width(ROW_GAP))
 
         Column(modifier = GlanceModifier.defaultWeight()) {
-            Text(text = app.label, style = bodyStyle(), maxLines = 1)
+            Text(text = if (app.packageName == "web") context.getString(R.string.websites) else app.label, style = bodyStyle(), maxLines = 1)
             Spacer(modifier = GlanceModifier.height(2.dp))
             // Track then fill, both absolute: the fill is barPercent of the track computed above.
             ProportionBar(

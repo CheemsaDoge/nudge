@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Nudge" parent="android:Theme.Material.Light.NoActionBar" />
-    <style name="Theme.Nudge.Overlay" parent="android:Theme.Material.Light.NoActionBar">
+    <style name="Theme.Nudge" parent="Theme.AppCompat.Light.NoActionBar" />
+    <style name="Theme.Nudge.Overlay" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="android:windowIsTranslucent">false</item>
         <item name="android:windowBackground">@android:color/white</item>
     </style>
+    <style name="Theme.Nudge.Scanner" parent="Theme.AppCompat.NoActionBar" />
 </resources>

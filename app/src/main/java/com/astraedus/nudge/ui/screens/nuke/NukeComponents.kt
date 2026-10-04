@@ -1,5 +1,7 @@
 package com.astraedus.nudge.ui.screens.nuke
 
+import com.astraedus.nudge.R
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -42,28 +44,29 @@ import com.astraedus.nudge.ui.qr.QrCodeGenerator
  */
 @Composable
 fun NukeIntroCard(onDismiss: () -> Unit) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                "Nuke is a second list, separate from your rules. When it's on, those apps don't open. At all.",
+                strings.getString(R.string.ui_nuke_is_a_second_list_separate_from_your_rules_when_it_s_on_those_apps),
                 style = MaterialTheme.typography.bodyMedium
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "You turn it on and off by scanning a code you keep somewhere inconvenient.",
+                strings.getString(R.string.ui_you_turn_it_on_and_off_by_scanning_a_code_you_keep_somewhere_inconveni),
                 style = MaterialTheme.typography.bodyMedium
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "Lost the code? There's an emergency way out: typing 64 characters by hand. It's meant to be annoying.",
+                strings.getString(R.string.ui_lost_the_code_there_s_an_emergency_way_out_typing_64_characters_by_han),
                 style = MaterialTheme.typography.bodyMedium
             )
             Spacer(Modifier.height(12.dp))
             Button(onClick = onDismiss) {
-                Text("Got it")
+                Text(strings.getString(R.string.ui_got_it))
             }
         }
     }
@@ -81,6 +84,7 @@ fun NukeStatusCard(
     onNukeNow: () -> Unit,
     onEmergencyEnd: () -> Unit
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     val containerColor = if (state.active) {
         MaterialTheme.colorScheme.errorContainer
     } else {
@@ -99,7 +103,7 @@ fun NukeStatusCard(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                if (state.active) "Nuke is on · ${pluralApps(state.nukedCount)}" else "Nuke is off",
+                if (state.active) strings.getString(R.string.ui_nuke_is_on_2, strings.getQuantityString(R.plurals.app_count, state.nukedCount, state.nukedCount)) else strings.getString(R.string.ui_nuke_is_off),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = contentColor
@@ -114,15 +118,15 @@ fun NukeStatusCard(
                 ) {
                     Icon(Icons.Outlined.QrCodeScanner, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Scan to end")
+                    Text(strings.getString(R.string.ui_scan_to_end))
                 }
                 Spacer(Modifier.height(4.dp))
                 TextButton(onClick = onEmergencyEnd, modifier = Modifier.fillMaxWidth()) {
-                    Text("Emergency: end without your code")
+                    Text(strings.getString(R.string.ui_emergency_end_without_your_code))
                 }
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Removing apps or changing the code needs the code too.",
+                    strings.getString(R.string.ui_removing_apps_or_changing_the_code_needs_the_code_too),
                     style = MaterialTheme.typography.labelSmall,
                     color = contentColor.copy(alpha = 0.75f)
                 )
@@ -134,7 +138,7 @@ fun NukeStatusCard(
                 ) {
                     Icon(Icons.Outlined.QrCodeScanner, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Scan to start")
+                    Text(strings.getString(R.string.ui_scan_to_start))
                 }
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(
@@ -142,11 +146,11 @@ fun NukeStatusCard(
                     enabled = state.canArm,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Nuke now")
+                    Text(strings.getString(R.string.ui_nuke_now))
                 }
                 val hint = when (state.armBlocker) {
-                    NukePolicy.ArmBlocker.NO_KEY -> "Pair a Nuke code first."
-                    NukePolicy.ArmBlocker.EMPTY_LIST -> "Add at least one app below first."
+                    NukePolicy.ArmBlocker.NO_KEY -> strings.getString(R.string.ui_pair_a_nuke_code_first)
+                    NukePolicy.ArmBlocker.EMPTY_LIST -> strings.getString(R.string.ui_add_at_least_one_app_below_first)
                     null -> null
                 }
                 if (hint != null) {
@@ -173,6 +177,7 @@ fun NukeKeyCard(
     onPairExisting: () -> Unit,
     onUnpair: () -> Unit
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -180,7 +185,7 @@ fun NukeKeyCard(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                "Your Nuke code",
+                strings.getString(R.string.ui_your_nuke_code),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Medium
             )
@@ -191,43 +196,43 @@ fun NukeKeyCard(
                 // ever silently fail. Say so instead. An already-paired phone keeps the emergency
                 // code as its way out (the unlock dialog says the same).
                 Text(
-                    "Pairing a Nuke code needs a camera, and this phone doesn't have one.",
+                    strings.getString(R.string.ui_pairing_a_nuke_code_needs_a_camera_and_this_phone_doesn_t_have_one),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             if (!state.hasKey) {
                 Text(
-                    "Pair a code first. Stick it somewhere inconvenient: the other side of the house, your car, a friend.",
+                    strings.getString(R.string.ui_pair_a_code_first_stick_it_somewhere_inconvenient_the_other_side_of_th),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(12.dp))
                 Button(onClick = onCreateQr, enabled = hasCamera, modifier = Modifier.fillMaxWidth()) {
-                    Text("Create a Nuke QR")
+                    Text(strings.getString(R.string.ui_create_a_nuke_qr))
                 }
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(onClick = onPairExisting, enabled = hasCamera, modifier = Modifier.fillMaxWidth()) {
-                    Text("Use a barcode I already have")
+                    Text(strings.getString(R.string.ui_use_a_barcode_i_already_have))
                 }
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Any QR or product barcode works. The one on a cereal box is fine.",
+                    strings.getString(R.string.ui_any_qr_or_product_barcode_works_the_one_on_a_cereal_box_is_fine),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
                 Text(
                     when (state.keyKind) {
-                        NukeKeyKind.GENERATED_QR -> "Paired: Nuke QR"
-                        NukeKeyKind.EXISTING_CODE -> "Paired: your own barcode"
-                        null -> "Paired"
+                        NukeKeyKind.GENERATED_QR -> strings.getString(R.string.ui_paired_nuke_qr)
+                        NukeKeyKind.EXISTING_CODE -> strings.getString(R.string.ui_paired_your_own_barcode)
+                        null -> strings.getString(R.string.ui_paired)
                     },
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    "Replace",
+                    strings.getString(R.string.ui_replace),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -237,15 +242,15 @@ fun NukeKeyCard(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     OutlinedButton(onClick = onCreateQr, enabled = hasCamera, modifier = Modifier.weight(1f)) {
-                        Text("New QR")
+                        Text(strings.getString(R.string.ui_new_qr))
                     }
                     OutlinedButton(onClick = onPairExisting, enabled = hasCamera, modifier = Modifier.weight(1f)) {
-                        Text("Own barcode")
+                        Text(strings.getString(R.string.ui_own_barcode))
                     }
                 }
                 Spacer(Modifier.height(8.dp))
                 TextButton(onClick = onUnpair, modifier = Modifier.fillMaxWidth()) {
-                    Text("Remove")
+                    Text(strings.getString(R.string.ui_remove))
                 }
             }
         }
@@ -266,6 +271,7 @@ fun NukePairingDialog(
     onConfirmScan: () -> Unit,
     onCancel: () -> Unit
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     val bitmap = remember(token) { QrCodeGenerator.generate(token, 768).asImageBitmap() }
 
     Dialog(onDismissRequest = onCancel) {
@@ -275,7 +281,7 @@ fun NukePairingDialog(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    "Your Nuke code",
+                    strings.getString(R.string.ui_your_nuke_code),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -288,31 +294,29 @@ fun NukePairingDialog(
                 ) {
                     Image(
                         bitmap = bitmap,
-                        contentDescription = "Your Nuke QR code",
+                        contentDescription = strings.getString(R.string.ui_your_nuke_qr_code),
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    "Save it, print it, or send it somewhere hard to reach. You'll scan it to start and end Nuke.",
+                    strings.getString(R.string.ui_save_it_print_it_or_send_it_somewhere_hard_to_reach_you_ll_scan_it_to),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(16.dp))
                 OutlinedButton(onClick = onSaveShare, modifier = Modifier.fillMaxWidth()) {
-                    Text("Save or share")
+                    Text(strings.getString(R.string.ui_save_or_share))
                 }
                 Spacer(Modifier.height(8.dp))
                 Button(onClick = onConfirmScan, modifier = Modifier.fillMaxWidth()) {
-                    Text("I've saved it. Scan to confirm")
+                    Text(strings.getString(R.string.ui_i_ve_saved_it_scan_to_confirm))
                 }
                 Spacer(Modifier.height(4.dp))
                 TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
-                    Text("Cancel")
+                    Text(strings.getString(R.string.ui_cancel))
                 }
             }
         }
     }
 }
-
-private fun pluralApps(count: Int): String = if (count == 1) "1 app" else "$count apps"

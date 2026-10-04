@@ -1,5 +1,9 @@
 package com.astraedus.nudge.ui.screens.home
 
+import com.astraedus.nudge.ui.localization.*
+
+import com.astraedus.nudge.R
+
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.clickable
@@ -65,6 +69,7 @@ fun HomeScreen(
     onNavigateToAppDetail: (String) -> Unit = {},
     onNavigateToNuke: () -> Unit = {}
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val challenge by viewModel.challenge.collectAsStateWithLifecycle()
     val nukeSummary by viewModel.nukeSummary.collectAsStateWithLifecycle()
@@ -124,16 +129,16 @@ fun HomeScreen(
             ) {
                 StatCard(
                     icon = Icons.Outlined.Schedule,
-                    label = "Screen Time",
-                    value = if (state.hasUsagePermission) state.todayTotalUsageFormatted else "--",
+                    label = strings.getString(R.string.ui_screen_time),
+                    value = if (state.hasUsagePermission) strings.durationLabel(state.todayTotalUsageFormatted) else "--",
                     modifier = Modifier.weight(1f),
                     // Granted, this card used to be inert - the one tile showing a number the
                     // stats screen exists to explain, and tapping it did nothing. Ungranted, the
                     // label IS the call to action, which is why it is not also a subtitle.
                     action = if (state.hasUsagePermission) {
-                        TileAction("See breakdown", onNavigateToStats)
+                        TileAction(strings.getString(R.string.ui_see_breakdown), onNavigateToStats)
                     } else {
-                        TileAction("Tap to enable") {
+                        TileAction(strings.getString(R.string.ui_tap_to_enable)) {
                             context.startActivity(
                                 Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
                                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
@@ -144,10 +149,10 @@ fun HomeScreen(
                 )
                 StatCard(
                     icon = Icons.Outlined.Shield,
-                    label = "Active Apps",
+                    label = strings.getString(R.string.ui_active_apps),
                     value = state.activeRuleCount.toString(),
                     modifier = Modifier.weight(1f),
-                    action = TileAction("Manage", onNavigateToActiveRules)
+                    action = TileAction(strings.getString(R.string.ui_manage), onNavigateToActiveRules)
                 )
             }
 
@@ -170,10 +175,10 @@ fun HomeScreen(
             )
 
             SectionHeader(
-                title = "Today",
+                title = strings.getString(R.string.ui_today),
                 // Said once, on the first section only. Repeating it over "All Time" reads as
                 // noise, and by then the chevrons have already taught the pattern.
-                hint = "Tap a tile for charts"
+                hint = strings.getString(R.string.ui_tap_a_tile_for_charts)
             )
 
             Row(
@@ -182,21 +187,21 @@ fun HomeScreen(
             ) {
                 StatCard(
                     icon = Icons.Outlined.Block,
-                    label = "Blocked",
+                    label = strings.getString(R.string.ui_blocked),
                     value = state.blockedCountToday.toString(),
                     modifier = Modifier.weight(1f),
-                    action = TileAction("Temptation patterns", onNavigateToInterventions)
+                    action = TileAction(strings.getString(R.string.ui_temptation_patterns), onNavigateToInterventions)
                 )
                 StatCard(
                     icon = Icons.Outlined.ThumbUp,
-                    label = "Walked Away",
+                    label = strings.getString(R.string.ui_walked_away),
                     value = state.changedMindCountToday.toString(),
                     modifier = Modifier.weight(1f),
-                    action = TileAction("Your willpower", onNavigateToWillpower)
+                    action = TileAction(strings.getString(R.string.ui_your_willpower), onNavigateToWillpower)
                 )
             }
 
-            SectionHeader(title = "All Time")
+            SectionHeader(title = strings.getString(R.string.ui_all_time))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -204,46 +209,46 @@ fun HomeScreen(
             ) {
                 StatCard(
                     icon = Icons.Outlined.Block,
-                    label = "Blocked",
+                    label = strings.getString(R.string.ui_blocked),
                     value = state.allTimeBlockedCount.toString(),
                     modifier = Modifier.weight(1f),
-                    action = TileAction("Temptation patterns", onNavigateToInterventions)
+                    action = TileAction(strings.getString(R.string.ui_temptation_patterns), onNavigateToInterventions)
                 )
                 StatCard(
                     icon = Icons.Outlined.ThumbUp,
-                    label = "Walked Away",
+                    label = strings.getString(R.string.ui_walked_away),
                     value = state.allTimeChangedMindCount.toString(),
                     modifier = Modifier.weight(1f),
-                    action = TileAction("Your willpower", onNavigateToWillpower)
+                    action = TileAction(strings.getString(R.string.ui_your_willpower), onNavigateToWillpower)
                 )
             }
 
             Spacer(Modifier.height(8.dp))
 
             Text(
-                "Quick Actions",
+                strings.getString(R.string.ui_quick_actions),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Medium
             )
 
             NavCard(
                 icon = Icons.Outlined.Apps,
-                title = "Manage Apps",
-                subtitle = "Configure block rules per app",
+                title = strings.getString(R.string.ui_manage_apps),
+                subtitle = strings.getString(R.string.ui_configure_block_rules_per_app),
                 onClick = onNavigateToApps
             )
 
             NavCard(
                 icon = Icons.Outlined.BarChart,
-                title = "Usage Stats",
-                subtitle = "See how you spend your time",
+                title = strings.getString(R.string.ui_usage_stats),
+                subtitle = strings.getString(R.string.ui_see_how_you_spend_your_time),
                 onClick = onNavigateToStats
             )
 
             NavCard(
                 icon = Icons.Outlined.Settings,
-                title = "Settings",
-                subtitle = "Permissions and preferences",
+                title = strings.getString(R.string.ui_settings),
+                subtitle = strings.getString(R.string.ui_permissions_and_preferences),
                 onClick = onNavigateToSettings
             )
 
@@ -268,6 +273,7 @@ private fun WeekAtAGlanceCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -281,27 +287,27 @@ private fun WeekAtAGlanceCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Last 7 days",
+                    strings.getString(R.string.ui_last_7_days),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.weight(1f)
                 )
                 Text(
-                    if (hasUsagePermission) weekTotalFormatted else "--",
+                    if (hasUsagePermission) strings.durationLabel(weekTotalFormatted) else "--",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.primary
                 )
                 Icon(
                     Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = "Open usage stats",
+                    contentDescription = strings.getString(R.string.ui_open_usage_stats),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
             if (charts.isEmpty) {
                 Text(
-                    "Your screen time and nudges will chart here once there's a day of data.",
+                    strings.getString(R.string.ui_your_screen_time_and_nudges_will_chart_here_once_there_s_a_day_of_data),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp)
@@ -321,14 +327,14 @@ private fun WeekAtAGlanceCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Nudges",
+                    strings.getString(R.string.ui_nudges),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f)
                 )
                 Text(
-                    "${charts.weekBlocked} blocked · ${charts.weekWalkedAway} walked away",
+                    strings.getString(R.string.ui_blocked_walked_away, charts.weekBlocked, charts.weekWalkedAway),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

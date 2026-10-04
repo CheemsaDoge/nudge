@@ -1,5 +1,8 @@
 package com.astraedus.nudge.service
 
+import androidx.core.content.ContextCompat
+import com.astraedus.nudge.ui.localization.featureName
+
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -2499,7 +2502,7 @@ class NudgeAccessibilityService : AccessibilityService() {
      */
     private fun coverLabel(featureKey: String?): String {
         val feature = InAppDetector.Feature.entries.firstOrNull { it.key == featureKey }
-        return "${feature?.displayName ?: "This tab"} blocked by $ownAppLabel"
+        return feature?.let { ContextCompat.getContextForLanguage(this).resources.featureName(it.key) }.orEmpty()
     }
 
     /**

@@ -1,10 +1,13 @@
 package com.astraedus.nudge.ui.overlay
 
+import com.astraedus.nudge.ui.localization.generatedRuleName
+import com.astraedus.nudge.R
+
 import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.key
@@ -26,7 +29,7 @@ import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
 @AndroidEntryPoint
-class BlockOverlayActivity : ComponentActivity() {
+class BlockOverlayActivity : AppCompatActivity() {
 
     @Inject lateinit var passthroughManager: PassthroughManager
     @Inject lateinit var nudgePreferences: NudgePreferences
@@ -233,7 +236,7 @@ class BlockOverlayActivity : ComponentActivity() {
         // launch us without pre-marking (the daily-limit HARD_BLOCK in TimeRemainingHandler) are
         // covered here too.
         NudgeAccessibilityService.markOverlayActive(packageName)
-        val ruleName = intent.getStringExtra(EXTRA_RULE_NAME)
+        val ruleName = resources.generatedRuleName(intent.getStringExtra(EXTRA_RULE_NAME))
         val dailyTimeRemainingMs = intent.getLongExtra(EXTRA_DAILY_TIME_REMAINING_MS, -1L)
             .let { if (it < 0) null else it }
         val dailyLimitMinutes = intent.getIntExtra(EXTRA_DAILY_LIMIT_MINUTES, -1)
@@ -260,13 +263,13 @@ class BlockOverlayActivity : ComponentActivity() {
         var passState = EmergencyPassUiState()
         runBlocking {
             titlePool = NudgeMessages.resolvePool(
-                nudgePreferences.customDelayTitles.first(), NudgeMessages.delayTitles
+                nudgePreferences.customDelayTitles.first(), resources.getStringArray(R.array.delay_titles).toList()
             )
             subtitlePool = NudgeMessages.resolvePool(
-                nudgePreferences.customDelaySubtitles.first(), NudgeMessages.delaySubtitles
+                nudgePreferences.customDelaySubtitles.first(), resources.getStringArray(R.array.delay_subtitles).toList()
             )
             hardBlockPool = NudgeMessages.resolvePool(
-                nudgePreferences.customHardBlockMessages.first(), NudgeMessages.hardBlockMessages
+                nudgePreferences.customHardBlockMessages.first(), resources.getStringArray(R.array.hard_block_messages).toList()
             )
 
             passState = resolveEmergencyPassState(

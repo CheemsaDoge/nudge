@@ -1,5 +1,7 @@
 package com.astraedus.nudge.ui.qr
 
+import com.astraedus.nudge.R
+
 import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Intent
@@ -11,7 +13,7 @@ import android.provider.Settings
 import android.util.Size
 import android.view.HapticFeedbackConstants
 import android.widget.Toast
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -43,7 +45,7 @@ import java.util.concurrent.Executors
  * Back is left to the system default (finish, RESULT_CANCELED), which is exactly "cancel -> null".
  * Nothing is photographed or stored: frames are decoded in memory and dropped.
  */
-class QrScanActivity : ComponentActivity() {
+class QrScanActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_TITLE = "com.astraedus.nudge.qr.TITLE"
@@ -198,7 +200,7 @@ class QrScanActivity : ComponentActivity() {
             .firstOrNull { selector -> runCatching { provider.hasCamera(selector) }.getOrDefault(false) }
 
     private fun cameraUnavailable() {
-        Toast.makeText(this, "Couldn't open the camera", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, getString(R.string.camera_open_failed), Toast.LENGTH_SHORT).show()
         finishWith(null)
     }
 
@@ -231,7 +233,7 @@ class QrScanActivity : ComponentActivity() {
         try {
             startActivity(intent)
         } catch (e: ActivityNotFoundException) {
-            Toast.makeText(this, "Open Settings > Apps > Nudge > Permissions", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, getString(R.string.camera_settings_hint), Toast.LENGTH_LONG).show()
         }
     }
 }

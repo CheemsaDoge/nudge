@@ -3,7 +3,7 @@ package com.astraedus.nudge.ui.overlay
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
@@ -30,7 +30,7 @@ import dagger.hilt.android.AndroidEntryPoint
  * future edit must not add any of those three without re-checking this contract.
  */
 @AndroidEntryPoint
-class PipEscapeActivity : ComponentActivity() {
+class PipEscapeActivity : AppCompatActivity() {
 
     private var resolvedTarget: PipSettingsTarget? = null
 

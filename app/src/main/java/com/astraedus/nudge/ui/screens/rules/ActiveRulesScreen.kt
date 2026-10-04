@@ -1,5 +1,9 @@
 package com.astraedus.nudge.ui.screens.rules
 
+import androidx.compose.ui.platform.LocalContext
+import com.astraedus.nudge.ui.localization.ruleGroupSummary
+import com.astraedus.nudge.R
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -55,6 +59,7 @@ fun ActiveRulesScreen(
     onNavigateBack: () -> Unit,
     onNavigateToRuleEditor: (String, Long) -> Unit
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val challenge by viewModel.challenge.collectAsStateWithLifecycle()
     var showMenu by remember { mutableStateOf(false) }
@@ -74,36 +79,36 @@ fun ActiveRulesScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Active Rules") },
+                title = { Text(strings.getString(R.string.ui_active_rules)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.getString(R.string.ui_back))
                     }
                 },
                 actions = {
                     IconButton(onClick = { showMenu = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "More options")
+                        Icon(Icons.Default.MoreVert, contentDescription = strings.getString(R.string.ui_more_options))
                     }
                     DropdownMenu(
                         expanded = showMenu,
                         onDismissRequest = { showMenu = false }
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Save backup") },
+                            text = { Text(strings.getString(R.string.ui_save_backup)) },
                             onClick = {
                                 showMenu = false
                                 backup.saveBackup()
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Share backup") },
+                            text = { Text(strings.getString(R.string.ui_share_backup)) },
                             onClick = {
                                 showMenu = false
                                 backup.shareBackup()
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Import backup") },
+                            text = { Text(strings.getString(R.string.ui_import_backup)) },
                             onClick = {
                                 showMenu = false
                                 backup.importBackup()
@@ -126,7 +131,7 @@ fun ActiveRulesScreen(
 
             if (state.groups.isEmpty() && !state.isLoading) {
                 Text(
-                    "No active rules yet. Go to Manage Apps to add some.",
+                    strings.getString(R.string.ui_no_active_rules_yet_go_to_manage_apps_to_add_some),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -151,6 +156,7 @@ private fun AppRuleCard(
     onToggle: () -> Unit,
     onClick: () -> Unit
 ) {
+    val strings = LocalContext.current.resources
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -196,7 +202,7 @@ private fun AppRuleCard(
                         MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                 )
                 Text(
-                    group.summaryText,
+                    strings.ruleGroupSummary(group.sourceRules),
                     style = MaterialTheme.typography.bodySmall,
                     color = if (group.enabled)
                         MaterialTheme.colorScheme.onSurfaceVariant

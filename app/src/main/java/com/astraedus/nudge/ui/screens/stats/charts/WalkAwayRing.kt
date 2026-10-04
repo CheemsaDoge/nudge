@@ -1,5 +1,9 @@
 package com.astraedus.nudge.ui.screens.stats.charts
 
+import com.astraedus.nudge.ui.localization.*
+
+import com.astraedus.nudge.R
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -34,6 +38,7 @@ fun WalkAwayRing(
     modifier: Modifier = Modifier,
     emptyMessage: String = "No blocks yet in this period"
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     val primaryColor = MaterialTheme.colorScheme.primary
     val trackColor = MaterialTheme.colorScheme.surfaceVariant
     val onSurfaceColor = MaterialTheme.colorScheme.onSurface
@@ -96,7 +101,7 @@ fun WalkAwayRing(
                     color = onSurfaceColor
                 )
                 Text(
-                    text = "walked away",
+                    text = strings.getString(R.string.ui_walked_away_3),
                     style = MaterialTheme.typography.labelMedium,
                     color = onSurfaceVariant
                 )
@@ -106,7 +111,7 @@ fun WalkAwayRing(
         // A blank message means the caller renders its own empty-state copy below the ring.
         if (!hasData && emptyMessage.isNotBlank()) {
             Text(
-                text = emptyMessage,
+                text = strings.builtInCopy(emptyMessage),
                 style = MaterialTheme.typography.bodySmall,
                 color = onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp)

@@ -1,5 +1,7 @@
 package com.astraedus.nudge.ui.overlay
 
+import com.astraedus.nudge.R
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -35,11 +37,12 @@ fun PipEscapeContent(
     onOpenSettings: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     // Two different fallbacks on purpose. The heading needs a title when the label is unresolvable;
     // the sentences need a SUBJECT, and reusing the heading's fallback there reads as nonsense
     // ("Picture-in-picture kept playing in a picture-in-picture window").
-    val heading = appLabel ?: "Picture-in-picture"
-    val subject = appLabel ?: "This app"
+    val heading = appLabel ?: strings.getString(R.string.ui_picture_in_picture)
+    val subject = appLabel ?: strings.getString(R.string.ui_this_app)
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -58,7 +61,7 @@ fun PipEscapeContent(
         ) {
             Icon(
                 imageVector = Icons.Filled.PictureInPicture,
-                contentDescription = "Picture-in-picture",
+                contentDescription = strings.getString(R.string.ui_picture_in_picture),
                 modifier = Modifier.size(80.dp),
                 tint = MaterialTheme.colorScheme.error
             )
@@ -75,9 +78,7 @@ fun PipEscapeContent(
             Spacer(modifier = Modifier.height(12.dp))
 
             Text(
-                text = "$subject kept playing in a floating picture-in-picture window, so " +
-                    "Nudge's block could not cover it. Android does not let an app switch that " +
-                    "off for you.",
+                text = strings.getString(R.string.ui_kept_playing_in_a_floating_picture_in_picture_window_so_nudge_s_block, subject),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -86,7 +87,7 @@ fun PipEscapeContent(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Turn off picture-in-picture for $subject and Nudge can block it properly.",
+                text = strings.getString(R.string.ui_turn_off_picture_in_picture_for_and_nudge_can_block_it_properly, subject),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -96,11 +97,11 @@ fun PipEscapeContent(
 
             if (canOpenSettings) {
                 Button(onClick = onOpenSettings) {
-                    Text("Open picture-in-picture settings")
+                    Text(strings.getString(R.string.ui_open_picture_in_picture_settings))
                 }
             } else {
                 Text(
-                    text = "Settings > Apps > Special app access > Picture-in-picture",
+                    text = strings.getString(R.string.ui_settings_apps_special_app_access_picture_in_picture),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
@@ -110,7 +111,7 @@ fun PipEscapeContent(
             Spacer(modifier = Modifier.height(8.dp))
 
             TextButton(onClick = onDismiss) {
-                Text("Not now")
+                Text(strings.getString(R.string.ui_not_now_2))
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -125,7 +126,7 @@ fun PipEscapeContent(
             Spacer(modifier = Modifier.height(4.dp))
 
             Text(
-                text = "Nudge only shows this once for each app.",
+                text = strings.getString(R.string.ui_nudge_only_shows_this_once_for_each_app),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
                 textAlign = TextAlign.Center
