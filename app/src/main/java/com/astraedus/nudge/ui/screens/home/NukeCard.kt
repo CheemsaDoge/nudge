@@ -1,5 +1,7 @@
 package com.astraedus.nudge.ui.screens.home
 
+import com.astraedus.nudge.R
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -36,6 +38,7 @@ fun NukeCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     val title: String
     val subtitle: String
     val onErrorState = summary.active
@@ -43,19 +46,19 @@ fun NukeCard(
     when {
         summary.needsSetup -> {
             title = "Nuke"
-            subtitle = "Set up a no-way-around-it list"
+            subtitle = strings.getString(R.string.ui_set_up_a_no_way_around_it_list)
         }
         summary.active -> {
-            title = "Nuke is on · ${pluralApps(summary.appCount)}"
-            subtitle = "Scan your code to end it"
+            title = strings.getString(R.string.ui_nuke_is_on_2, strings.getQuantityString(R.plurals.app_count, summary.appCount, summary.appCount))
+            subtitle = strings.getString(R.string.ui_scan_your_code_to_end_it)
         }
         summary.appCount == 0 || !summary.hasKey -> {
-            title = "Nuke is off"
-            subtitle = "Add apps and pair a code"
+            title = strings.getString(R.string.ui_nuke_is_off)
+            subtitle = strings.getString(R.string.ui_add_apps_and_pair_a_code)
         }
         else -> {
-            title = "Nuke is off"
-            subtitle = "${pluralApps(summary.appCount)} ready"
+            title = strings.getString(R.string.ui_nuke_is_off)
+            subtitle = strings.getQuantityString(R.plurals.ready_app_count, summary.appCount, summary.appCount)
         }
     }
 

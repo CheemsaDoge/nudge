@@ -1,5 +1,9 @@
 package com.astraedus.nudge.ui.screens.stats.charts
 
+import com.astraedus.nudge.ui.localization.*
+
+import com.astraedus.nudge.R
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,6 +44,7 @@ fun WeekHourHeatmap(
     rowLabels: List<String> = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"),
     emptyMessage: String = "No blocks yet in this period"
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     val primaryColor = MaterialTheme.colorScheme.primary
     val surfaceVariantColor = MaterialTheme.colorScheme.surfaceVariant
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
@@ -55,7 +60,7 @@ fun WeekHourHeatmap(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                emptyMessage,
+                strings.builtInCopy(emptyMessage),
                 style = MaterialTheme.typography.bodySmall,
                 color = onSurfaceVariant
             )
@@ -76,7 +81,7 @@ fun WeekHourHeatmap(
                         contentAlignment = Alignment.CenterStart
                     ) {
                         Text(
-                            text = rowLabels.getOrNull(rowIndex) ?: "",
+                            text = strings.weekdayLabel(rowIndex),
                             style = MaterialTheme.typography.labelSmall,
                             color = onSurfaceVariant,
                             fontSize = 9.sp
@@ -122,10 +127,10 @@ fun WeekHourHeatmap(
                 .padding(top = 2.dp, start = LABEL_COLUMN_WIDTH),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("12am", style = MaterialTheme.typography.labelSmall, color = onSurfaceVariant, fontSize = 9.sp)
-            Text("6am", style = MaterialTheme.typography.labelSmall, color = onSurfaceVariant, fontSize = 9.sp)
-            Text("12pm", style = MaterialTheme.typography.labelSmall, color = onSurfaceVariant, fontSize = 9.sp)
-            Text("6pm", style = MaterialTheme.typography.labelSmall, color = onSurfaceVariant, fontSize = 9.sp)
+            Text(strings.getString(R.string.ui_12am), style = MaterialTheme.typography.labelSmall, color = onSurfaceVariant, fontSize = 9.sp)
+            Text(strings.getString(R.string.ui_6am), style = MaterialTheme.typography.labelSmall, color = onSurfaceVariant, fontSize = 9.sp)
+            Text(strings.getString(R.string.ui_12pm), style = MaterialTheme.typography.labelSmall, color = onSurfaceVariant, fontSize = 9.sp)
+            Text(strings.getString(R.string.ui_6pm), style = MaterialTheme.typography.labelSmall, color = onSurfaceVariant, fontSize = 9.sp)
         }
     }
 }

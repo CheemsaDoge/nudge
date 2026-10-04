@@ -1,5 +1,9 @@
 package com.astraedus.nudge.ui.screens.stats.charts
 
+import com.astraedus.nudge.ui.localization.*
+
+import com.astraedus.nudge.R
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -57,6 +61,7 @@ fun WeeklyBarChart(
     chartHeight: Dp = 100.dp,
     formatDuration: (Long) -> String = ::formatShortDuration
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     val primaryColor = MaterialTheme.colorScheme.primary
     val surfaceVariantColor = MaterialTheme.colorScheme.surfaceVariant
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
@@ -70,7 +75,7 @@ fun WeeklyBarChart(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                "No data this week",
+                strings.getString(R.string.ui_no_data_this_week),
                 style = MaterialTheme.typography.bodySmall,
                 color = onSurfaceVariant
             )
@@ -94,7 +99,7 @@ fun WeeklyBarChart(
                 .height(chartHeight)
                 .semantics {
                     contentDescription = days.joinToString(", ") {
-                        "${it.label} ${formatDuration(it.totalMs)}"
+                        "${strings.builtInCopy(it.label)} ${strings.durationLabel(formatDuration(it.totalMs))}"
                     }
                 }
                 .then(
@@ -159,6 +164,7 @@ internal fun DayAxisLabels(
     selectedIndex: Int?,
     modifier: Modifier = Modifier
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     val primaryColor = MaterialTheme.colorScheme.primary
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
 
@@ -179,7 +185,7 @@ internal fun DayAxisLabels(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = label,
+                    text = strings.builtInCopy(label),
                     style = MaterialTheme.typography.labelSmall,
                     fontSize = 10.sp,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,

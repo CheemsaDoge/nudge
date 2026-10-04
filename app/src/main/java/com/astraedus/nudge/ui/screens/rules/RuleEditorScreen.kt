@@ -1,5 +1,10 @@
 package com.astraedus.nudge.ui.screens.rules
 
+import com.astraedus.nudge.ui.localization.builtInCopy
+
+import com.astraedus.nudge.ui.localization.ruleDescription
+import com.astraedus.nudge.R
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -71,6 +76,7 @@ fun RuleEditorScreen(
     onNavigateToRuleEditor: (String, Long) -> Unit,
     onCreateNewRule: (String) -> Unit
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -83,10 +89,10 @@ fun RuleEditorScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (state.existingRuleId == null) "New Rule" else "Edit Rule") },
+                title = { Text(if (state.existingRuleId == null) strings.getString(R.string.ui_new_rule) else strings.getString(R.string.ui_edit_rule)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.getString(R.string.ui_back))
                     }
                 }
             )
@@ -117,15 +123,12 @@ fun RuleEditorScreen(
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            "Current Rules",
+                            strings.getString(R.string.ui_current_rules),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium
                         )
                         InfoButton(
-                            "If multiple active rules match, Nudge uses the strongest action:\n\n" +
-                            "Hard Block > Delay > Breathing.\n\n" +
-                            "Whole-app rules apply when opening the app. Feature rules apply only when Nudge detects that feature, like Reels, Explore, or Shorts.\n\n" +
-                            "Example: Instagram can delay when opened, hard block Reels, and delay Explore."
+                            strings.getString(R.string.ui_if_multiple_active_rules_match_nudge_uses_the_strongest_action_hard_bl)
                         )
                     }
 
@@ -149,7 +152,7 @@ fun RuleEditorScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    rule.description,
+                                    rule.sourceRule?.let { strings.ruleDescription(it) } ?: rule.description,
                                     style = MaterialTheme.typography.bodyMedium,
                                     modifier = Modifier.weight(1f),
                                     color = if (rule.enabled)
@@ -170,7 +173,7 @@ fun RuleEditorScreen(
                             onClick = { onCreateNewRule(state.packageName) },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Add Rule")
+                            Text(strings.getString(R.string.ui_add_rule))
                         }
                     }
                 }
@@ -185,17 +188,12 @@ fun RuleEditorScreen(
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
-                        "Block Mode",
+                        strings.getString(R.string.ui_block_mode),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Medium
                     )
                     InfoButton(
-                        "Choose what this rule does when it matches.\n\n" +
-                        "Hard Block -- Completely prevents opening the app. You can only go back to the home screen.\n\n" +
-                        "Delay -- Shows a countdown timer (5-60 seconds) before letting you in. Gives your brain time to reconsider.\n\n" +
-                        "Hold -- Same wait, but the clock only runs while your finger is on the screen. Let go and it starts over.\n\n" +
-                        "Breathing -- Guides you through a calming breathing exercise before the app opens.\n\n" +
-                        "If multiple matching rules are active, the strongest action wins: Hard Block > Delay > Hold > Breathing."
+                        strings.getString(R.string.ui_choose_what_this_rule_does_when_it_matches_hard_block_completely_preve)
                     )
                 }
 
@@ -216,7 +214,7 @@ fun RuleEditorScreen(
                             icon = {}
                         ) {
                             Text(
-                                blockModeLabel(mode),
+                                strings.builtInCopy(blockModeLabel(mode)),
                                 maxLines = 1
                             )
                         }
@@ -224,7 +222,7 @@ fun RuleEditorScreen(
                 }
 
                 Text(
-                    blockModeDescription(state.blockMode),
+                    strings.builtInCopy(blockModeDescription(state.blockMode)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -232,7 +230,7 @@ fun RuleEditorScreen(
 
             if (state.blockMode.usesDuration) {
                 val durationLabel =
-                    if (state.blockMode == BlockMode.HOLD) "Hold Duration" else "Delay Duration"
+                    if (state.blockMode == BlockMode.HOLD) strings.getString(R.string.ui_hold_duration) else strings.getString(R.string.ui_delay_duration)
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
                         durationLabel,
@@ -252,22 +250,22 @@ fun RuleEditorScreen(
                             FilterChip(
                                 selected = state.delaySeconds == seconds,
                                 onClick = { viewModel.setDelaySeconds(seconds) },
-                                label = { Text("${seconds}s") }
+                                label = { Text(strings.getString(R.string.ui_s, seconds)) }
                             )
                         }
                         FilterChip(
                             selected = isCustomDelay,
                             onClick = { showDelayDialog = true },
                             label = {
-                                Text(if (isCustomDelay) "${state.delaySeconds}s" else "Custom")
+                                Text(if (isCustomDelay) strings.getString(R.string.ui_s, state.delaySeconds) else strings.getString(R.string.ui_custom))
                             }
                         )
                     }
 
                     if (showDelayDialog) {
                         CustomTimeDialog(
-                            title = "Custom $durationLabel",
-                            unit = "seconds",
+                            title = strings.getString(R.string.ui_custom_2, durationLabel),
+                            unit = strings.getString(R.string.ui_seconds),
                             currentValue = state.delaySeconds,
                             min = 1,
                             max = 300,
@@ -295,15 +293,12 @@ fun RuleEditorScreen(
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            "Daily Time Limit",
+                            strings.getString(R.string.ui_daily_time_limit),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium
                         )
                         InfoButton(
-                            "Set a daily usage budget for this app.\n\n" +
-                            "Once you've used the app for this many minutes today, it switches to a hard block for the rest of the day -- regardless of what block mode you chose above.\n\n" +
-                            "The block lands as soon as the budget runs out, even if you're still inside the app.\n\n" +
-                            "Example: Delay mode + 30 minute limit = you get a countdown each time you open the app, but after 30 minutes of total usage today, the app is fully blocked."
+                            strings.getString(R.string.ui_set_a_daily_usage_budget_for_this_app_once_you_ve_used_the_app_for_thi_2)
                         )
                     }
                     Switch(
@@ -314,7 +309,7 @@ fun RuleEditorScreen(
 
                 if (state.dailyLimitEnabled) {
                     val dailyPresets = remember { listOf(15, 30, 60, 120) }
-                    val dailyPresetLabels = remember { mapOf(15 to "15m", 30 to "30m", 60 to "1h", 120 to "2h") }
+                    val dailyPresetLabels = remember { mapOf(15 to strings.getString(R.string.ui_15m), 30 to strings.getString(R.string.ui_30m), 60 to strings.getString(R.string.ui_1h), 120 to strings.getString(R.string.ui_2h)) }
                     var showDailyLimitDialog by remember { mutableStateOf(false) }
                     val isCustomDaily = state.dailyLimitMinutes !in dailyPresets
 
@@ -326,7 +321,7 @@ fun RuleEditorScreen(
                             FilterChip(
                                 selected = state.dailyLimitMinutes == minutes,
                                 onClick = { viewModel.setDailyLimitMinutes(minutes) },
-                                label = { Text(dailyPresetLabels[minutes] ?: "${minutes}m") }
+                                label = { Text(dailyPresetLabels[minutes] ?: strings.getString(R.string.ui_m, minutes)) }
                             )
                         }
                         FilterChip(
@@ -335,7 +330,7 @@ fun RuleEditorScreen(
                             label = {
                                 Text(
                                     if (isCustomDaily) formatMinutesDisplay(state.dailyLimitMinutes)
-                                    else "Custom"
+                                    else strings.getString(R.string.ui_custom)
                                 )
                             }
                         )
@@ -343,8 +338,8 @@ fun RuleEditorScreen(
 
                     if (showDailyLimitDialog) {
                         CustomTimeDialog(
-                            title = "Custom Daily Limit",
-                            unit = "minutes",
+                            title = strings.getString(R.string.ui_custom_daily_limit),
+                            unit = strings.getString(R.string.ui_minutes),
                             currentValue = state.dailyLimitMinutes,
                             min = 1,
                             max = 480,
@@ -369,21 +364,16 @@ fun RuleEditorScreen(
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Text(
-                                    "Show time remaining",
+                                    strings.getString(R.string.ui_show_time_remaining),
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Medium
                                 )
                                 InfoButton(
-                                    "Displays remaining daily time as a floating overlay while you use this app.\n\n" +
-                                    "The counter changes color as time runs out:\n" +
-                                    "Green = more than 50% left\n" +
-                                    "Orange = 25-50% left\n" +
-                                    "Red = less than 25% left\n\n" +
-                                    "Requires a daily time limit to be set."
+                                    strings.getString(R.string.ui_displays_remaining_daily_time_as_a_floating_overlay_while_you_use_this)
                                 )
                             }
                             Text(
-                                "Floating overlay showing remaining daily time",
+                                strings.getString(R.string.ui_floating_overlay_showing_remaining_daily_time),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -410,14 +400,12 @@ fun RuleEditorScreen(
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            "Schedule",
+                            strings.getString(R.string.ui_schedule),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium
                         )
                         InfoButton(
-                            "Only apply this rule during specific times.\n\n" +
-                            "Select which days the rule is active, and set a start and end time.\n\n" +
-                            "Overnight schedules work too -- if the end time is before the start time (e.g. 10 PM to 6 AM), the rule spans midnight."
+                            strings.getString(R.string.ui_only_apply_this_rule_during_specific_times_select_which_days_the_rule)
                         )
                     }
                     Switch(
@@ -428,7 +416,7 @@ fun RuleEditorScreen(
 
                 if (state.scheduleEnabled) {
                     Text(
-                        "Active days",
+                        strings.getString(R.string.ui_active_days),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -438,8 +426,8 @@ fun RuleEditorScreen(
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         val dayLabels = remember { listOf(
-                            1 to "Mon", 2 to "Tue", 3 to "Wed", 4 to "Thu",
-                            5 to "Fri", 6 to "Sat", 7 to "Sun"
+                            1 to strings.getString(R.string.ui_mon), 2 to strings.getString(R.string.ui_tue), 3 to strings.getString(R.string.ui_wed), 4 to strings.getString(R.string.ui_thu),
+                            5 to strings.getString(R.string.ui_fri), 6 to strings.getString(R.string.ui_sat), 7 to strings.getString(R.string.ui_sun)
                         ) }
                         dayLabels.forEach { (day, label) ->
                             FilterChip(
@@ -456,7 +444,7 @@ fun RuleEditorScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Start time", style = MaterialTheme.typography.bodyMedium)
+                        Text(strings.getString(R.string.ui_start_time), style = MaterialTheme.typography.bodyMedium)
                         TimeSelector(
                             hour = state.scheduleStartHour,
                             minute = state.scheduleStartMinuteOfHour,
@@ -470,7 +458,7 @@ fun RuleEditorScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("End time", style = MaterialTheme.typography.bodyMedium)
+                        Text(strings.getString(R.string.ui_end_time), style = MaterialTheme.typography.bodyMedium)
                         TimeSelector(
                             hour = state.scheduleEndHour,
                             minute = state.scheduleEndMinuteOfHour,
@@ -480,7 +468,7 @@ fun RuleEditorScreen(
 
                     if (state.scheduleDays.isEmpty()) {
                         Text(
-                            "No days selected - rule will apply every day during the time window",
+                            strings.getString(R.string.ui_no_days_selected_rule_will_apply_every_day_during_the_time_window),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -498,20 +486,17 @@ fun RuleEditorScreen(
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            "Apply Rule To",
+                            strings.getString(R.string.ui_apply_rule_to),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium
                         )
                         InfoButton(
-                            "Choose where this rule applies.\n\n" +
-                            "If no features are selected, this rule applies to the whole app when you open it.\n\n" +
-                            "If you select Reels, Explore, Shorts, or TikTok Feed, this rule only applies when Nudge detects that feature.\n\n" +
-                            "The action still comes from Block Mode above. For example, select Explore + Delay to add a 15 second delay only when opening Explore."
+                            strings.getString(R.string.ui_choose_where_this_rule_applies_if_no_features_are_selected_this_rule_a)
                         )
                     }
 
                     Text(
-                        "Select features to scope this rule. Leave all off for the whole app.",
+                        strings.getString(R.string.ui_select_features_to_scope_this_rule_leave_all_off_for_the_whole_app),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -526,7 +511,7 @@ fun RuleEditorScreen(
                             onCheckedChange = { viewModel.setInAppReels(it) }
                         )
                         InAppCheckbox(
-                            label = "Explore",
+                            label = strings.getString(R.string.ui_explore),
                             checked = state.inAppExplore,
                             onCheckedChange = { viewModel.setInAppExplore(it) }
                         )
@@ -544,7 +529,7 @@ fun RuleEditorScreen(
                     // TikTok features
                     if (pkg == "com.zhiliaoapp.musically" || pkg == "com.ss.android.ugc.trill") {
                         InAppCheckbox(
-                            label = "TikTok Feed",
+                            label = strings.getString(R.string.ui_tiktok_feed),
                             checked = state.inAppTikTokFeed,
                             onCheckedChange = { viewModel.setInAppTikTokFeed(it) }
                         )
@@ -567,19 +552,16 @@ fun RuleEditorScreen(
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text(
-                                "Interaction Counter",
+                                strings.getString(R.string.ui_interaction_counter_2),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Medium
                             )
                             InfoButton(
-                                "Shows a floating counter on screen while you use this app.\n\n" +
-                                "For YouTube/Instagram/TikTok: counts how many Reels or Shorts you've scrolled through.\n\n" +
-                                "For other apps: counts how many times you've tapped the screen.\n\n" +
-                                "Seeing the raw number makes mindless usage feel concrete. The counter turns orange at 10, deep orange at 20, and red at 30."
+                                strings.getString(R.string.ui_shows_a_floating_counter_on_screen_while_you_use_this_app_for_youtube)
                             )
                         }
                         Text(
-                            "Show floating counter while using this app",
+                            strings.getString(R.string.ui_show_floating_counter_while_using_this_app),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -606,19 +588,16 @@ fun RuleEditorScreen(
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text(
-                                "Auto-close app",
+                                strings.getString(R.string.ui_auto_close_app),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Medium
                             )
                             InfoButton(
-                                "Automatically sends you to the home screen after N scrolls/taps and/or after a set amount of time in the app -- whichever happens first.\n\n" +
-                                "The interaction counter above must be on to kick by scrolls/taps. Kicking by time works either way.\n\n" +
-                                "After an auto-close, the app is locked behind a cooldown delay before you can re-open it.\n\n" +
-                                "This is the nuclear option for stopping infinite scroll."
+                                strings.getString(R.string.ui_automatically_sends_you_to_the_home_screen_after_n_scrolls_taps_and_or)
                             )
                         }
                         Text(
-                            "Sends you to the home screen. Whichever trigger fires first wins.",
+                            strings.getString(R.string.ui_sends_you_to_the_home_screen_whichever_trigger_fires_first_wins),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -641,7 +620,7 @@ fun RuleEditorScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    "After N interactions",
+                                    strings.getString(R.string.ui_after_n_interactions),
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Medium
                                 )
@@ -653,7 +632,7 @@ fun RuleEditorScreen(
 
                             if (state.autoKickByInteractions) {
                                 Text(
-                                    "After ${state.autoKickAfter} scrolls/taps",
+                                    strings.getString(R.string.ui_after_scrolls_taps, state.autoKickAfter),
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Medium
                                 )
@@ -682,7 +661,7 @@ fun RuleEditorScreen(
                             }
                         } else {
                             Text(
-                                "Turn on the interaction counter above to also kick after N scrolls or taps.",
+                                strings.getString(R.string.ui_turn_on_the_interaction_counter_above_to_also_kick_after_n_scrolls_or),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -693,8 +672,8 @@ fun RuleEditorScreen(
                         MinutesField(
                             value = state.autoKickAfterMinutesText,
                             onValueChange = { viewModel.setAutoKickAfterMinutesText(it) },
-                            labelText = "Or after this long in the app",
-                            supportingText = "Counts foreground time in one session. Leave blank for off."
+                            labelText = strings.getString(R.string.ui_or_after_this_long_in_the_app),
+                            supportingText = strings.getString(R.string.ui_counts_foreground_time_in_one_session_leave_blank_for_off)
                         )
 
                         Spacer(Modifier.height(8.dp))
@@ -702,8 +681,8 @@ fun RuleEditorScreen(
                         MinutesField(
                             value = state.autoKickCooldownMinutesText,
                             onValueChange = { viewModel.setAutoKickCooldownMinutesText(it) },
-                            labelText = "Cooldown",
-                            supportingText = "Wait this long before you can re-open the app after an auto-close."
+                            labelText = strings.getString(R.string.ui_cooldown),
+                            supportingText = strings.getString(R.string.ui_wait_this_long_before_you_can_re_open_the_app_after_an_auto_close)
                         )
                     }
                 }
@@ -724,18 +703,16 @@ fun RuleEditorScreen(
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text(
-                                "Grayscale Mode",
+                                strings.getString(R.string.ui_grayscale_mode),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Medium
                             )
                             InfoButton(
-                                "Makes your phone screen black-and-white while this app is in the foreground.\n\n" +
-                                "Color is a major factor in making apps feel rewarding. Removing it makes scrolling feel less engaging.\n\n" +
-                                "Requires a one-time setup -- check Settings for the guide."
+                                strings.getString(R.string.ui_makes_your_phone_screen_black_and_white_while_this_app_is_in_the_foreg)
                             )
                         }
                         Text(
-                            "Make screen gray when this app is open",
+                            strings.getString(R.string.ui_make_screen_gray_when_this_app_is_open),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -746,7 +723,7 @@ fun RuleEditorScreen(
                             if (enabled && !hasGrayscalePermission(context)) {
                                 scope.launch {
                                     snackbarHostState.showSnackbar(
-                                        "Grayscale requires setup — check Settings"
+                                        strings.getString(R.string.ui_grayscale_requires_setup_check_settings_2)
                                     )
                                 }
                             } else {
@@ -763,7 +740,7 @@ fun RuleEditorScreen(
                 onClick = { viewModel.save() },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(if (state.existingRuleId == null) "Create Rule" else "Save Rule")
+                Text(if (state.existingRuleId == null) strings.getString(R.string.ui_create_rule) else strings.getString(R.string.ui_save_rule))
             }
 
             if (state.existingRuleId != null) {
@@ -774,7 +751,7 @@ fun RuleEditorScreen(
                         contentColor = MaterialTheme.colorScheme.error
                     )
                 ) {
-                    Text("Delete Rule")
+                    Text(strings.getString(R.string.ui_delete_rule))
                 }
             }
 
@@ -785,6 +762,7 @@ fun RuleEditorScreen(
 
 @Composable
 private fun InfoButton(explanation: String) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     var showDialog by remember { mutableStateOf(false) }
 
     IconButton(
@@ -793,7 +771,7 @@ private fun InfoButton(explanation: String) {
     ) {
         Icon(
             Icons.AutoMirrored.Outlined.HelpOutline,
-            contentDescription = "More info",
+            contentDescription = strings.getString(R.string.ui_more_info),
             modifier = Modifier.size(20.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
         )
@@ -804,7 +782,7 @@ private fun InfoButton(explanation: String) {
             onDismissRequest = { showDialog = false },
             confirmButton = {
                 TextButton(onClick = { showDialog = false }) {
-                    Text("Got it")
+                    Text(strings.getString(R.string.ui_got_it))
                 }
             },
             text = {

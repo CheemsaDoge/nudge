@@ -1,5 +1,7 @@
 package com.astraedus.nudge.ui.components
 
+import com.astraedus.nudge.R
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -26,47 +28,43 @@ fun AccessibilityDisclosureDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text("How Nudge Works")
+            Text(strings.getString(R.string.ui_how_nudge_works))
         },
         text = {
             Column {
                 Text(
-                    "Nudge uses Android's Accessibility Service to detect which app " +
-                        "is currently open on your screen.",
+                    strings.getString(R.string.ui_nudge_uses_android_s_accessibility_service_to_detect_which_app_is_curr),
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    "This lets Nudge show breathing exercises, delays, or blocks " +
-                        "when you open apps you've chosen to limit.",
+                    strings.getString(R.string.ui_this_lets_nudge_show_breathing_exercises_delays_or_blocks_when_you_ope),
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    "Nudge only reads the name of the app in the foreground. " +
-                        "It does not read your messages, keystrokes, passwords, " +
-                        "or screen content.",
+                    strings.getString(R.string.ui_nudge_only_reads_the_name_of_the_app_in_the_foreground_it_does_not_rea),
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    "All data stays on your device. Nudge has no internet " +
-                        "permission and cannot send data anywhere.",
+                    strings.getString(R.string.ui_all_data_stays_on_your_device_nudge_has_no_internet_permission_and_can),
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
         },
         confirmButton = {
             TextButton(onClick = onConfirm) {
-                Text("I Understand")
+                Text(strings.getString(R.string.ui_i_understand))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Not Now")
+                Text(strings.getString(R.string.ui_not_now))
             }
         }
     )

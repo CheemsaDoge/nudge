@@ -1,5 +1,9 @@
 package com.astraedus.nudge.ui.screens.stats
 
+import com.astraedus.nudge.ui.localization.*
+
+import com.astraedus.nudge.R
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,15 +41,18 @@ fun AppDetailScreen(
     viewModel: AppDetailViewModel,
     onNavigateBack: () -> Unit
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val dateLabel = strings.dayLabel(state.selectedDate, state.dateLabel)
+    val rangeLabel = strings.rangeLabel(state.rangeStart, state.rangeEnd, state.weekRangeLabel)
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(state.appName.ifEmpty { "App Details" }) },
+                title = { Text(state.appName.ifEmpty { strings.getString(R.string.ui_app_details) }) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.getString(R.string.ui_back))
                     }
                 }
             )
@@ -59,8 +66,8 @@ fun AppDetailScreen(
         ) {
             item {
                 DayNavigationHeader(
-                    dayLabel = state.dateLabel,
-                    rangeLabel = state.weekRangeLabel,
+                    dayLabel = dateLabel,
+                    rangeLabel = rangeLabel,
                     canGoForward = state.canGoForward,
                     isToday = state.isToday,
                     onPreviousDay = viewModel::goToPreviousDay,
@@ -85,18 +92,18 @@ fun AppDetailScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            "Screen time · ${state.dateLabel}",
+                            strings.getString(R.string.ui_screen_time_2, dateLabel),
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                         )
                         Text(
-                            state.todayFormatted,
+                            strings.durationLabel(state.todayFormatted),
                             style = MaterialTheme.typography.headlineLarge,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Text(
-                            "${state.weekTotalFormatted} · ${state.weekRangeLabel}",
+                            "${strings.durationLabel(state.weekTotalFormatted)} · ${rangeLabel}",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                         )
@@ -106,8 +113,8 @@ fun AppDetailScreen(
 
             item {
                 InsightSection(
-                    title = "Screen time",
-                    subtitle = "${state.weekRangeLabel} · tap a bar to see that day"
+                    title = strings.getString(R.string.ui_screen_time_3),
+                    subtitle = strings.getString(R.string.ui_tap_a_bar_to_see_that_day, rangeLabel)
                 ) {
                     WeeklyBarChart(
                         days = state.weeklyData,
@@ -120,8 +127,8 @@ fun AppDetailScreen(
 
             item {
                 InsightSection(
-                    title = "Hourly pattern",
-                    subtitle = state.dateLabel
+                    title = strings.getString(R.string.ui_hourly_pattern),
+                    subtitle = dateLabel
                 ) {
                     HourlyHeatmap(
                         hourlyMs = state.hourlyMs,
@@ -132,8 +139,8 @@ fun AppDetailScreen(
 
             item {
                 InsightSection(
-                    title = "Nudge effectiveness",
-                    subtitle = "${state.weekRangeLabel} · tap a bar to see that day"
+                    title = strings.getString(R.string.ui_nudge_effectiveness),
+                    subtitle = strings.getString(R.string.ui_tap_a_bar_to_see_that_day, rangeLabel)
                 ) {
                     BlockedTrendChart(
                         days = state.trendData,
@@ -145,18 +152,18 @@ fun AppDetailScreen(
             }
 
             item {
-                InsightSection(title = "Nudge activity") {
+                InsightSection(title = strings.getString(R.string.ui_nudge_activity)) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceEvenly
                         ) {
                             StatItem(
-                                label = "Blocked · ${state.dateLabel}",
+                                label = strings.getString(R.string.ui_blocked_2, dateLabel),
                                 value = "${state.blockedCountToday}"
                             )
                             StatItem(
-                                label = "Walked away · ${state.dateLabel}",
+                                label = strings.getString(R.string.ui_walked_away_2, dateLabel),
                                 value = "${state.walkedAwayCountToday}"
                             )
                         }
@@ -164,9 +171,9 @@ fun AppDetailScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceEvenly
                         ) {
-                            StatItem(label = "Blocked · all time", value = "${state.blockedCountTotal}")
+                            StatItem(label = strings.getString(R.string.ui_blocked_all_time), value = "${state.blockedCountTotal}")
                             StatItem(
-                                label = "Walked away · all time",
+                                label = strings.getString(R.string.ui_walked_away_all_time),
                                 value = "${state.walkedAwayCountTotal}"
                             )
                         }
@@ -176,7 +183,7 @@ fun AppDetailScreen(
 
             if (state.blockModeBreakdown.isNotEmpty()) {
                 item {
-                    InsightSection(title = "Block mode breakdown", subtitle = "All time") {
+                    InsightSection(title = strings.getString(R.string.ui_block_mode_breakdown), subtitle = strings.getString(R.string.ui_all_time_2)) {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             state.blockModeBreakdown.forEach { (mode, count) ->
                                 Row(
@@ -184,7 +191,7 @@ fun AppDetailScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(
-                                        formatBlockMode(mode),
+                                        strings.builtInCopy(formatBlockMode(mode)),
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )

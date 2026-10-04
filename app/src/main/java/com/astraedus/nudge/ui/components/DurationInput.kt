@@ -1,5 +1,7 @@
 package com.astraedus.nudge.ui.components
 
+import com.astraedus.nudge.R
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -150,6 +152,7 @@ fun MinutesField(
     supportingText: String? = null,
     maxMinutes: Int = DurationInput.MAX_MINUTES
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     val invalid = DurationInput.isInvalid(value, maxMinutes)
 
     Column(modifier = modifier) {
@@ -157,8 +160,8 @@ fun MinutesField(
             value = value,
             onValueChange = { onValueChange(DurationInput.sanitize(it)) },
             label = { Text(labelText) },
-            suffix = { Text("min") },
-            placeholder = { Text("Off") },
+            suffix = { Text(strings.getString(R.string.ui_min)) },
+            placeholder = { Text(strings.getString(R.string.ui_off)) },
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Number,
                 imeAction = ImeAction.Done
@@ -168,7 +171,7 @@ fun MinutesField(
             modifier = Modifier.fillMaxWidth()
         )
         val helper = when {
-            invalid -> "Enter 1-$maxMinutes minutes, or leave blank for off"
+            invalid -> strings.getString(R.string.ui_enter_1_minutes_or_leave_blank_for_off, maxMinutes)
             supportingText != null -> supportingText
             else -> null
         }

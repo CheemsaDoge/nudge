@@ -88,7 +88,7 @@ private val TALL_THRESHOLD = 150.dp
 
 @Composable
 private fun TopBlockedContent(read: WidgetReads.TopBlockedRead) {
-    val context = LocalContext.current
+    val context = androidx.core.content.ContextCompat.getContextForLanguage(LocalContext.current)
     val size = LocalSize.current
     val rows = if (size.height >= TALL_THRESHOLD) read.snapshot.apps else read.snapshot.apps.take(SHORT_ROWS)
 
@@ -153,7 +153,7 @@ private fun BlockedRow(
     icon: Bitmap?,
     barTrack: Dp
 ) {
-    val context = LocalContext.current
+    val context = androidx.core.content.ContextCompat.getContextForLanguage(LocalContext.current)
     // The row is the tap target for that app's detail screen. A package the deep link refuses to
     // route (see WidgetDeepLink) falls back to opening the app at Home rather than to a route
     // nobody can resolve.

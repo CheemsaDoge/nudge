@@ -105,6 +105,12 @@ class NudgeWidgetUpdater @Inject constructor(
                 .collect { pushAll("protection") }
         }
 
+        scope.launch {
+            com.astraedus.nudge.ui.localization.LocaleUpdates.configurationTags.collect {
+                pushAll("language")
+            }
+        }
+
         // Today + Top-blocked. MAX(id) over the primary key is the cheapest question that re-emits
         // on a write to usage_events; the widgets re-read their real data themselves.
         scope.launch {

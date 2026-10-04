@@ -1,5 +1,10 @@
 package com.astraedus.nudge.ui.backup
 
+import com.astraedus.nudge.ui.localization.builtInCopy
+import com.astraedus.nudge.ui.localization.formatCopy
+
+import com.astraedus.nudge.R
+
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -91,6 +96,7 @@ fun rememberBackupActions(viewModel: BackupViewModel): BackupActions {
  */
 @Composable
 fun BackupDialogs(viewModel: BackupViewModel) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val challenge by viewModel.challenge.collectAsStateWithLifecycle()
 
@@ -103,16 +109,16 @@ fun BackupDialogs(viewModel: BackupViewModel) {
     state.importPreview?.let { preview ->
         AlertDialog(
             onDismissRequest = { viewModel.cancelImport() },
-            title = { Text("Import backup") },
-            text = { Text(buildImportPreviewMessage(preview)) },
+            title = { Text(strings.getString(R.string.ui_import_backup)) },
+            text = { Text(buildImportPreviewMessage(preview, strings::formatCopy)) },
             confirmButton = {
                 TextButton(onClick = { viewModel.confirmImport() }) {
-                    Text("Import")
+                    Text(strings.getString(R.string.ui_import))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.cancelImport() }) {
-                    Text("Cancel")
+                    Text(strings.getString(R.string.ui_cancel))
                 }
             }
         )
@@ -121,11 +127,11 @@ fun BackupDialogs(viewModel: BackupViewModel) {
     state.importOutcome?.let { outcome ->
         AlertDialog(
             onDismissRequest = { viewModel.clearImportOutcome() },
-            title = { Text("Import Complete") },
-            text = { Text(buildImportOutcomeMessage(outcome)) },
+            title = { Text(strings.getString(R.string.ui_import_complete)) },
+            text = { Text(buildImportOutcomeMessage(outcome, strings::formatCopy)) },
             confirmButton = {
                 TextButton(onClick = { viewModel.clearImportOutcome() }) {
-                    Text("OK")
+                    Text(strings.getString(R.string.ui_ok))
                 }
             }
         )
@@ -134,11 +140,11 @@ fun BackupDialogs(viewModel: BackupViewModel) {
     state.importError?.let { error ->
         AlertDialog(
             onDismissRequest = { viewModel.clearImportOutcome() },
-            title = { Text("Import Failed") },
-            text = { Text(error) },
+            title = { Text(strings.getString(R.string.ui_import_failed)) },
+            text = { Text(strings.builtInCopy(error)) },
             confirmButton = {
                 TextButton(onClick = { viewModel.clearImportOutcome() }) {
-                    Text("OK")
+                    Text(strings.getString(R.string.ui_ok))
                 }
             }
         )
@@ -147,11 +153,11 @@ fun BackupDialogs(viewModel: BackupViewModel) {
     state.saveMessage?.let { message ->
         AlertDialog(
             onDismissRequest = { viewModel.dismissSaveMessage() },
-            title = { Text("Save backup") },
-            text = { Text(message) },
+            title = { Text(strings.getString(R.string.ui_save_backup)) },
+            text = { Text(strings.builtInCopy(message)) },
             confirmButton = {
                 TextButton(onClick = { viewModel.dismissSaveMessage() }) {
-                    Text("OK")
+                    Text(strings.getString(R.string.ui_ok))
                 }
             }
         )
@@ -199,5 +205,5 @@ private suspend fun shareBackupJson(context: Context, json: String) {
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
 
-    context.startActivity(Intent.createChooser(shareIntent, "Share backup"))
+    context.startActivity(Intent.createChooser(shareIntent, context.getString(R.string.ui_share_backup)))
 }

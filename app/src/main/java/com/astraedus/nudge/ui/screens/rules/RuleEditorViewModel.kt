@@ -22,7 +22,8 @@ data class RuleSummary(
     val id: Long,
     val mode: String,
     val enabled: Boolean,
-    val description: String  // e.g. "Whole app: Delay 15s", "Shorts: Hard Block"
+    val description: String,  // e.g. "Whole app: Delay 15s", "Shorts: Hard Block"
+    val sourceRule: BlockRule? = null
 )
 
 @Immutable
@@ -200,6 +201,7 @@ class RuleEditorViewModel @Inject constructor(
                     val extraStr = if (extras.isNotEmpty()) " + ${extras.joinToString(", ")}" else ""
 
                     RuleSummary(
+                        sourceRule = rule,
                         id = rule.id,
                         mode = rule.mode,
                         enabled = rule.enabled,

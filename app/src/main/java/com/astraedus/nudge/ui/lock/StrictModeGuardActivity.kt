@@ -2,7 +2,7 @@ package com.astraedus.nudge.ui.lock
 
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
@@ -41,7 +41,7 @@ import javax.inject.Inject
  * The challenge string is freshly generated here (difficulty from prefs) and is always solvable.
  */
 @AndroidEntryPoint
-class StrictModeGuardActivity : ComponentActivity() {
+class StrictModeGuardActivity : AppCompatActivity() {
 
     @Inject lateinit var nudgePreferences: NudgePreferences
     @Inject lateinit var escapeManager: StrictModeEscapeManager
@@ -92,15 +92,13 @@ class StrictModeGuardActivity : ComponentActivity() {
                         ChallengeDialog(
                             target = challengeTarget,
                             prompt = if (nuke) {
-                                "Nuke is on, and this screen is a way around it. Type the code to " +
-                                    "change Nudge's system settings, or go back."
+                                getString(R.string.strict_guard_nuke)
                             } else {
-                                "Strict Mode is protecting this screen. " +
-                                    "Unlock to change Nudge's system settings, or go back."
+                                getString(R.string.strict_guard)
                             },
                             onUnlock = { onUnlocked() },
                             onCancel = { onChangedMind() },
-                            title = if (nuke) "Nuke is on" else "Strict Mode locked"
+                            title = if (nuke) getString(R.string.ui_nuke_is_on) else getString(R.string.strict_locked)
                         )
                     }
                 }

@@ -1,5 +1,7 @@
 package com.astraedus.nudge.ui.overlay
 
+import com.astraedus.nudge.R
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -30,13 +32,14 @@ fun HardBlockContent(
     appLabel: String? = null,
     dailyTimeRemainingMs: Long? = null,
     dailyLimitMinutes: Int? = null,
-    messagePool: List<String> = NudgeMessages.hardBlockMessages,
+    messagePool: List<String>? = null,
     canUseEmergencyPass: Boolean = false,
     emergencyLocked: Boolean = false,
     nextPassMs: Long = 0L,
     onUseEmergencyPass: () -> Unit = {}
 ) {
-    val message = remember { messagePool.random() }
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
+    val message = remember(messagePool) { (messagePool ?: strings.getStringArray(R.array.hard_block_messages).toList()).random() }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -55,7 +58,7 @@ fun HardBlockContent(
         ) {
             Icon(
                 imageVector = Icons.Filled.Block,
-                contentDescription = "Blocked",
+                contentDescription = strings.getString(R.string.ui_blocked),
                 modifier = Modifier.size(80.dp),
                 tint = MaterialTheme.colorScheme.error
             )
@@ -63,7 +66,7 @@ fun HardBlockContent(
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = appLabel ?: "App Blocked",
+                text = appLabel ?: strings.getString(R.string.ui_app_blocked),
                 style = MaterialTheme.typography.headlineLarge,
                 color = MaterialTheme.colorScheme.onBackground
             )
@@ -71,7 +74,7 @@ fun HardBlockContent(
             if (dailyTimeRemainingMs != null && dailyTimeRemainingMs <= 0L && dailyLimitMinutes != null) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Daily limit reached",
+                    text = strings.getString(R.string.ui_daily_limit_reached),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.error
                 )
@@ -98,7 +101,7 @@ fun HardBlockContent(
             Spacer(modifier = Modifier.height(48.dp))
 
             Button(onClick = onGoBack) {
-                Text("Go Back")
+                Text(strings.getString(R.string.ui_go_back))
             }
 
             EmergencyPassAction(
@@ -111,7 +114,7 @@ fun HardBlockContent(
             if (ruleName != null) {
                 Spacer(modifier = Modifier.height(24.dp))
                 Text(
-                    text = "Rule: $ruleName",
+                    text = strings.getString(R.string.ui_rule, ruleName),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
                     textAlign = TextAlign.Center

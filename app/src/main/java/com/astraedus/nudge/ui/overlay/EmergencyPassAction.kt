@@ -1,5 +1,7 @@
 package com.astraedus.nudge.ui.overlay
 
+import com.astraedus.nudge.R
+
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
@@ -73,12 +75,13 @@ fun EmergencyPassAction(
     nextPassMs: Long,
     onUse: () -> Unit
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     when {
         canUse -> {
             Spacer(modifier = Modifier.height(8.dp))
             TextButton(onClick = onUse) {
                 Text(
-                    text = "Use for 2 minutes · once a day",
+                    text = strings.getString(R.string.ui_use_for_2_minutes_once_a_day),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -91,7 +94,7 @@ fun EmergencyPassAction(
             // rather than a hidden one, so the user knows the daily pass exists but is spent.
             TextButton(onClick = {}, enabled = false) {
                 Text(
-                    text = "Daily pass used · next in ${formatDuration(nextPassMs)}",
+                    text = strings.getString(R.string.ui_daily_pass_used_next_in, formatDuration(nextPassMs)),
                     style = MaterialTheme.typography.bodySmall,
                     textAlign = TextAlign.Center
                 )

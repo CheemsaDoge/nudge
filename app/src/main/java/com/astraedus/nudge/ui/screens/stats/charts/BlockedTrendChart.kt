@@ -1,5 +1,9 @@
 package com.astraedus.nudge.ui.screens.stats.charts
 
+import com.astraedus.nudge.ui.localization.*
+
+import com.astraedus.nudge.R
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -53,6 +57,7 @@ fun BlockedTrendChart(
     chartHeight: Dp = 80.dp,
     showLegend: Boolean = true
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     val primaryColor = MaterialTheme.colorScheme.primary
     val secondaryColor = MaterialTheme.colorScheme.secondary
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
@@ -66,7 +71,7 @@ fun BlockedTrendChart(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                "No nudges yet",
+                strings.getString(R.string.ui_no_nudges_yet),
                 style = MaterialTheme.typography.bodySmall,
                 color = onSurfaceVariant
             )
@@ -88,7 +93,7 @@ fun BlockedTrendChart(
                 .height(chartHeight)
                 .semantics {
                     contentDescription = days.joinToString(", ") {
-                        "${it.label} ${it.blockedCount} blocked ${it.walkedAwayCount} walked away"
+                        strings.getString(R.string.ui_blocked_walked_away_2, strings.builtInCopy(it.label), it.blockedCount, it.walkedAwayCount)
                     }
                 }
                 .then(
@@ -166,9 +171,9 @@ fun BlockedTrendChart(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                LegendSwatch(color = primaryColor.copy(alpha = 0.45f), label = "Blocked")
+                LegendSwatch(color = primaryColor.copy(alpha = 0.45f), label = strings.getString(R.string.ui_blocked))
                 Text("   ", style = MaterialTheme.typography.labelSmall)
-                LegendSwatch(color = secondaryColor, label = "Walked Away")
+                LegendSwatch(color = secondaryColor, label = strings.getString(R.string.ui_walked_away))
             }
         }
     }

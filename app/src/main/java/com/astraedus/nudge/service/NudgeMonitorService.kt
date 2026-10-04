@@ -1,5 +1,7 @@
 package com.astraedus.nudge.service
 
+import com.astraedus.nudge.ui.localization.builtInCopy
+import com.astraedus.nudge.ui.localization.LocaleUpdates
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -253,7 +255,7 @@ class NudgeMonitorService : Service() {
         // and a DataStore read and this call has a hard few-second deadline. The first evaluation
         // below runs immediately and corrects it within milliseconds if it was wrong, and the gate
         // means it costs a post only when it WAS wrong.
-        val startupCopy = ServiceHealth.ACTIVE.notificationCopy()
+        val startupCopy = localizedCopy(ServiceHealth.ACTIVE.notificationCopy())
         startForeground(NOTIFICATION_ID, buildStatusNotification(startupCopy))
         notificationGate.onPosted(startupCopy)
         isRunning = true
@@ -290,6 +292,7 @@ class NudgeMonitorService : Service() {
     }
 
     private var pollJobStarted = false
+    private var lastSeenLocaleTags = ""
 
     /**
      * Suspends until something that can change health changes, or [HEALTH_POLL_INTERVAL_MS] passes.
@@ -302,6 +305,7 @@ class NudgeMonitorService : Service() {
     private suspend fun awaitStateChangeOrTimeout() {
         withTimeoutOrNull(HEALTH_POLL_INTERVAL_MS) {
             merge(
+                LocaleUpdates.configurationTags.filter { it != lastSeenLocaleTags }.map { },
                 AccessibilityConnectionSignal.generation
                     .filter { it != lastSeenConnectionGeneration }
                     .map { },
@@ -360,7 +364,8 @@ class NudgeMonitorService : Service() {
         // service keeps running (a dismissal does not stop a foreground service) and blocking is
         // unaffected, so re-posting would buy nothing and would be exactly the every-few-seconds
         // resurrection the reporter complained about. It comes back on the next real state change.
-        val copy = health.notificationCopy()
+        val copy = localizedCopy(health.notificationCopy())
+        lastSeenLocaleTags = LocaleUpdates.configurationTags.value
         if (notificationGate.shouldPost(copy)) {
             val manager = getSystemService(NotificationManager::class.java)
             if (manager != null) {
@@ -403,11 +408,11 @@ class NudgeMonitorService : Service() {
         manager.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_ID,
-                getString(com.astraedus.nudge.R.string.notification_channel_name),
+                ContextCompat.getContextForLanguage(this).getString(com.astraedus.nudge.R.string.notification_channel_name),
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description =
-                    getString(com.astraedus.nudge.R.string.notification_channel_description)
+                    ContextCompat.getContextForLanguage(this).getString(com.astraedus.nudge.R.string.notification_channel_description)
                 setShowBadge(false)
             }
         )
@@ -423,6 +428,11 @@ class NudgeMonitorService : Service() {
      * health to copy twice, once here and once at the gate, is how a "nothing changed" decision
      * quietly stops matching what is actually drawn.
      */
+    private fun localizedCopy(copy: ServiceHealthCopy): ServiceHealthCopy {
+        val strings = ContextCompat.getContextForLanguage(this).resources
+        return ServiceHealthCopy(strings.builtInCopy(copy.title), strings.builtInCopy(copy.body))
+    }
+
     private fun buildStatusNotification(copy: ServiceHealthCopy): Notification {
         val tapIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP

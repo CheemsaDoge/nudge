@@ -110,7 +110,7 @@ private fun ProtectionRow(
     modifier: GlanceModifier,
     lockedHint: Boolean = false
 ) {
-    val context = LocalContext.current
+    val context = androidx.core.content.ContextCompat.getContextForLanguage(LocalContext.current)
     val dotColor: ColorProvider = when (snapshot.state) {
         ProtectionState.ON -> GlanceTheme.colors.primary
         ProtectionState.OFF -> GlanceTheme.colors.onSurfaceVariant

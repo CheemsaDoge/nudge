@@ -1,5 +1,7 @@
 package com.astraedus.nudge.ui.screens.stats
 
+import com.astraedus.nudge.ui.localization.*
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,6 +36,7 @@ fun InsightsRangeToggle(
     onSelect: (InsightsRange) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     val options = InsightsRange.entries
     SingleChoiceSegmentedButtonRow(modifier = modifier) {
         options.forEachIndexed { index, range ->
@@ -42,7 +45,7 @@ fun InsightsRangeToggle(
                 onClick = { onSelect(range) },
                 shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size)
             ) {
-                Text(range.label)
+                Text(strings.builtInCopy(range.label))
             }
         }
     }

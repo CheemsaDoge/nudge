@@ -1,5 +1,7 @@
 package com.astraedus.nudge.ui.overlay
 
+import com.astraedus.nudge.R
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -45,15 +47,16 @@ fun HoldContent(
     appLabel: String? = null,
     dailyTimeRemainingMs: Long? = null,
     dailyLimitMinutes: Int? = null,
-    titlePool: List<String> = NudgeMessages.delayTitles,
+    titlePool: List<String>? = null,
     canUseEmergencyPass: Boolean = false,
     emergencyLocked: Boolean = false,
     nextPassMs: Long = 0L,
     onUseEmergencyPass: () -> Unit = {}
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     // Unkeyed by design, exactly as in DelayContent: BlockOverlayActivity composes this subtree
     // under a per-delivery key, so a new block already gets a fresh headline (issue #15).
-    val title = remember { titlePool.random() }
+    val title = remember(titlePool) { (titlePool ?: strings.getStringArray(R.array.delay_titles).toList()).random() }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -78,7 +81,7 @@ fun HoldContent(
                 )
                 if (dailyTimeRemainingMs != null && dailyLimitMinutes != null && dailyLimitMinutes > 0) {
                     Text(
-                        text = "${formatDuration(dailyTimeRemainingMs)} left today",
+                        text = strings.getString(R.string.ui_left_today, formatDuration(dailyTimeRemainingMs)),
                         style = MaterialTheme.typography.bodyMedium,
                         color = timeRemainingColor(dailyTimeRemainingMs, dailyLimitMinutes)
                     )
@@ -105,7 +108,7 @@ fun HoldContent(
             Spacer(modifier = Modifier.height(48.dp))
 
             OutlinedButton(onClick = onCancel) {
-                Text("I changed my mind")
+                Text(strings.getString(R.string.ui_i_changed_my_mind))
             }
 
             EmergencyPassAction(
@@ -118,7 +121,7 @@ fun HoldContent(
             if (ruleName != null) {
                 Spacer(modifier = Modifier.height(24.dp))
                 Text(
-                    text = "Rule: $ruleName",
+                    text = strings.getString(R.string.ui_rule, ruleName),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
                     textAlign = TextAlign.Center

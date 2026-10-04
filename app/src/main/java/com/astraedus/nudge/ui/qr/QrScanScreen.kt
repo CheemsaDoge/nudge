@@ -1,5 +1,7 @@
 package com.astraedus.nudge.ui.qr
 
+import com.astraedus.nudge.R
+
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -89,6 +91,7 @@ internal fun QrScanScreen(
     onOpenSettings: () -> Unit,
     onCancel: () -> Unit
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
@@ -108,7 +111,7 @@ internal fun QrScanScreen(
             )
             Viewfinder(side = side, top = windowTop)
             Text(
-                text = "Hold the code inside the frame. It scans by itself.",
+                text = strings.getString(R.string.ui_hold_the_code_inside_the_frame_it_scans_by_itself),
                 style = MaterialTheme.typography.bodyMedium,
                 color = ON_CAMERA_MUTED,
                 textAlign = TextAlign.Center,
@@ -147,7 +150,7 @@ internal fun QrScanScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             TextButton(onClick = onCancel) {
-                Text("Cancel", color = ON_CAMERA, style = MaterialTheme.typography.titleMedium)
+                Text(strings.getString(R.string.ui_cancel), color = ON_CAMERA, style = MaterialTheme.typography.titleMedium)
             }
             if (state == ScanScreenState.SCANNING && torchAvailable) {
                 TorchButton(torchOn = torchOn, onToggle = onToggleTorch)
@@ -180,7 +183,8 @@ private fun Header(title: String, subtitle: String?, modifier: Modifier = Modifi
 
 @Composable
 private fun TorchButton(torchOn: Boolean, onToggle: () -> Unit) {
-    val label = if (torchOn) "Turn flashlight off" else "Turn flashlight on"
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
+    val label = if (torchOn) strings.getString(R.string.ui_turn_flashlight_off) else strings.getString(R.string.ui_turn_flashlight_on)
     FilledTonalIconButton(
         onClick = onToggle,
         modifier = Modifier
@@ -277,12 +281,13 @@ private fun PermissionPanel(
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     val blocked = state == ScanScreenState.BLOCKED
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         PanelIcon(if (blocked) Icons.Outlined.NoPhotography else Icons.Outlined.PhotoCamera)
         Spacer(Modifier.height(20.dp))
         Text(
-            text = if (blocked) "Camera access is off" else "Nudge needs the camera to scan",
+            text = if (blocked) strings.getString(R.string.ui_camera_access_is_off) else strings.getString(R.string.ui_nudge_needs_the_camera_to_scan),
             style = MaterialTheme.typography.titleLarge,
             color = ON_CAMERA,
             textAlign = TextAlign.Center
@@ -290,9 +295,9 @@ private fun PermissionPanel(
         Spacer(Modifier.height(8.dp))
         Text(
             text = if (blocked) {
-                "Android won't ask again. Allow Camera for Nudge in Settings, then come back here."
+                strings.getString(R.string.ui_android_won_t_ask_again_allow_camera_for_nudge_in_settings_then_come_b)
             } else {
-                "It's used only to read the code. Nothing is photographed, saved or sent anywhere."
+                strings.getString(R.string.ui_it_s_used_only_to_read_the_code_nothing_is_photographed_saved_or_sent)
             },
             style = MaterialTheme.typography.bodyMedium,
             color = ON_CAMERA_MUTED,
@@ -301,11 +306,11 @@ private fun PermissionPanel(
         when (state) {
             ScanScreenState.RATIONALE -> {
                 Spacer(Modifier.height(24.dp))
-                Button(onClick = onAllowCamera) { Text("Allow camera") }
+                Button(onClick = onAllowCamera) { Text(strings.getString(R.string.ui_allow_camera)) }
             }
             ScanScreenState.BLOCKED -> {
                 Spacer(Modifier.height(24.dp))
-                Button(onClick = onOpenSettings) { Text("Open settings") }
+                Button(onClick = onOpenSettings) { Text(strings.getString(R.string.ui_open_settings)) }
             }
             else -> Unit
         }

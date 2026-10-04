@@ -1,5 +1,7 @@
 package com.astraedus.nudge.ui.screens.onboarding
 
+import com.astraedus.nudge.R
+
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -48,6 +50,7 @@ import kotlinx.coroutines.launch
 fun OnboardingScreen(
     onComplete: () -> Unit
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     val pagerState = rememberPagerState(pageCount = { 3 })
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -92,14 +95,14 @@ fun OnboardingScreen(
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Next")
+                    Text(strings.getString(R.string.ui_next))
                 }
             } else {
                 Button(
                     onClick = onComplete,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Get Started")
+                    Text(strings.getString(R.string.ui_get_started))
                 }
             }
         }
@@ -108,6 +111,7 @@ fun OnboardingScreen(
 
 @Composable
 private fun WelcomePage() {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -129,14 +133,14 @@ private fun WelcomePage() {
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            "Mindful app usage through gentle friction",
+            strings.getString(R.string.ui_mindful_app_usage_through_gentle_friction),
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.height(16.dp))
         Text(
-            "Take back control of your screen time with breathing exercises, delays, and daily limits.",
+            strings.getString(R.string.ui_take_back_control_of_your_screen_time_with_breathing_exercises_delays),
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -150,6 +154,7 @@ private fun PermissionsPage(
     onGrantOverlay: () -> Unit,
     onGrantUsageStats: () -> Unit
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     var showAccessibilityDisclosure by remember { mutableStateOf(false) }
 
     if (showAccessibilityDisclosure) {
@@ -173,13 +178,13 @@ private fun PermissionsPage(
     ) {
         Spacer(Modifier.height(24.dp))
         Text(
-            "Permissions",
+            strings.getString(R.string.ui_permissions),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            "Nudge needs these permissions to work. No data is ever sent anywhere — the app has no internet permission.",
+            strings.getString(R.string.ui_nudge_needs_these_permissions_to_work_no_data_is_ever_sent_anywhere_th),
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -188,8 +193,8 @@ private fun PermissionsPage(
 
         PermissionCard(
             icon = Icons.Outlined.Accessibility,
-            title = "Accessibility Service",
-            description = "Detects which app is in the foreground so Nudge can trigger your block rules. Also identifies in-app screens (like YouTube Shorts or Instagram Reels) by checking navigation elements. Does not read your messages, keystrokes, or screen content.",
+            title = strings.getString(R.string.ui_accessibility_service),
+            description = strings.getString(R.string.ui_detects_which_app_is_in_the_foreground_so_nudge_can_trigger_your_block),
             onClick = { showAccessibilityDisclosure = true }
         )
 
@@ -197,8 +202,8 @@ private fun PermissionsPage(
 
         PermissionCard(
             icon = Icons.Outlined.Layers,
-            title = "Display Over Other Apps",
-            description = "Shows the delay countdown or breathing exercise overlay on top of blocked apps — this is how Nudge presents the pause before opening. Granting it also helps Nudge restart its own protection if Android stops it in the background. Either way, opening Nudge yourself always brings blocking back if it's stopped.",
+            title = strings.getString(R.string.ui_display_over_other_apps),
+            description = strings.getString(R.string.ui_shows_the_delay_countdown_or_breathing_exercise_overlay_on_top_of_bloc),
             onClick = onGrantOverlay
         )
 
@@ -206,8 +211,8 @@ private fun PermissionsPage(
 
         PermissionCard(
             icon = Icons.Outlined.QueryStats,
-            title = "Usage Stats Access",
-            description = "Tracks how long you use each app per day to enforce daily time budgets. Usage data is stored locally on your device only.",
+            title = strings.getString(R.string.ui_usage_stats_access),
+            description = strings.getString(R.string.ui_tracks_how_long_you_use_each_app_per_day_to_enforce_daily_time_budgets),
             onClick = onGrantUsageStats
         )
         Spacer(Modifier.height(24.dp))
@@ -221,6 +226,7 @@ private fun PermissionCard(
     description: String,
     onClick: () -> Unit
 ) {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     androidx.compose.material3.Card(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -238,7 +244,7 @@ private fun PermissionCard(
             )
             Spacer(Modifier.height(12.dp))
             OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-                Text("Grant Permission")
+                Text(strings.getString(R.string.ui_grant_permission))
             }
         }
     }
@@ -246,6 +252,7 @@ private fun PermissionCard(
 
 @Composable
 private fun ReadyPage() {
+    val strings = androidx.compose.ui.platform.LocalContext.current.resources
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -261,13 +268,13 @@ private fun ReadyPage() {
         )
         Spacer(Modifier.height(32.dp))
         Text(
-            "You're all set",
+            strings.getString(R.string.ui_you_re_all_set),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            "Add apps to start building healthier habits",
+            strings.getString(R.string.ui_add_apps_to_start_building_healthier_habits),
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
