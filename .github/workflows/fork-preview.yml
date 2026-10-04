@@ -1,0 +1,118 @@
+name: Fork Android preview build
+on:
+  push:
+    branches: [build/android-language-preview]
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # FIRST, before any JVM work: the user-facing store notes for this versionCode must
+      # exist and be plain text. v1.18.1 shipped to the LIVE Play listing with a raw markdown
+      # issue link in it, because the notes were derived from CHANGELOG.md — dev-facing prose
+      # with links and markup. They are their own artefact now, and this is the gate. Runs on
+      # BOTH paths: a `v*` tag (the release that ships) and a push to main (which catches
+      # "bumped versionCode, forgot the notes" before anyone cuts the tag).
+      # Costs ~1s and needs no toolchain, so it fails fast and cheap.
+      - name: Check store release notes
+        run: |
+          scripts/test-store-notes.sh   # the validator itself still rejects every markup class
+          scripts/check-store-notes.sh  # …and this release's notes pass it
+
+      # The bench signing-key guard in scripts/device-qa.sh (2026-09-29: a silent APK=debug
+      # install locked every CI APK out of the bench). Shimmed adb/apksigner, no toolchain, ~2s.
+      - name: Test device-QA signing-key guard
+        run: scripts/test-cert-guard.sh
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          validate-wrappers: false
+
+      # One invocation: Gradle configures the project once and runs both. Lint is the ONLY check
+      # here that can see an API-level mistake - minSdk is 26, so a call to a method added in API
+      # 28/29 is a NoSuchMethodError on a real Android 8 or 9 phone, which no JVM test can see (no
+      # Android runtime) and the bench Pixel 3 cannot reproduce (API 31). Three such calls reached
+      # main before this existed, one on the accessibility hot path. Gates BOTH paths below, since
+      # the tag release and the rolling main-latest build share this job.
+      # `lint { abortOnError = true }` in app/build.gradle.kts is what gives it teeth.
+      - name: Run tests and lint
+        run: ./gradlew test lintDebug
+
+      # A unit-test failure that only happens on a CI runner is only diagnosable from the report.
+      # Issue #53 fired twice on this step and both times the console line was all that survived:
+      # "HomeBlockedTileTest ... UncaughtExceptionsBeforeTest", with the exception that actually
+      # leaked — carried as a SUPPRESSED throwable, i.e. the offender's own stack — nowhere. The XML
+      # keeps it. 12 parallel runs of this suite were needed to catch it again; one artifact would
+      # have been enough. Only on failure, so a green run uploads nothing.
+      - name: Upload unit test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: |
+            app/build/reports/tests/**
+            app/build/test-results/**
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Decode keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > nudge-release.keystore
+
+      - name: Write keystore.properties
+        run: |
+          cat > keystore.properties <<PROPS
+          storeFile=../nudge-release.keystore
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyAlias=nudge
+          keyPassword=${{ secrets.KEYSTORE_PASSWORD }}
+          PROPS
+
+      - name: Resolve version
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION=$(sed -n 's/.*versionName = "\([0-9][0-9.]*\)".*/\1/p' app/build.gradle.kts | head -1)
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "Resolved version: $VERSION"
+
+      - name: Build release APK
+        run: ./gradlew assembleRelease
+
+      - name: Rename APK
+        run: cp app/build/outputs/apk/release/app-release.apk "nudge-v${VERSION}.apk"
+
+      # AAB (Android App Bundle) is the format Google Play requires for production
+      # uploads. Play App Signing re-signs it with the app key Google holds; the
+      # keystore above is only the UPLOAD key. APK is kept for direct GitHub
+      # downloads + F-Droid.
+      - name: Build release AAB (Google Play)
+        run: ./gradlew bundleRelease
+
+      - name: Rename AAB
+        run: cp app/build/outputs/bundle/release/app-release.aab "nudge-v${VERSION}.aab"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nudge-release-${{ env.VERSION }}
+          path: |
+            nudge-v*.apk
+            nudge-v*.aab
+          if-no-files-found: error
+          # The APK/AAB's durable home is the GitHub Release below; the run
+          # artifact is a redundant copy, so keep it short-lived.
+          retention-days: 3
+
