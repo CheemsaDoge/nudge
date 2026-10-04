@@ -318,10 +318,6 @@ class TabCoverOverlayManager @Inject constructor(
         view.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
     }
 
-    /** Never empty: an unlabelled region is the thing this exists to avoid. */
-    private fun describeCover(label: String): String =
-        if (label.isBlank()) "Blocked by Nudge" else "$label blocked by Nudge"
-
     /**
      * Run [block] on the main thread, or inline when it is already there (or when there is no Looper
      * at all, which is only ever a JVM unit test). See [mainHandler].

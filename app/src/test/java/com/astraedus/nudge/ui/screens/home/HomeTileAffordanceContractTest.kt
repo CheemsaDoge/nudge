@@ -1,5 +1,6 @@
 package com.astraedus.nudge.ui.screens.home
 
+import com.astraedus.nudge.ui.localization.resolveEnglishResourceCalls
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -36,7 +37,7 @@ class HomeTileAffordanceContractTest {
         val text = (candidates.firstOrNull { it.exists() }
             ?: error("$relativePath not found from working dir ${File("").absolutePath}"))
             .readText()
-        return text
+        return resolveEnglishResourceCalls(text)
             .replace(Regex("""/\*[\s\S]*?\*/"""), "")
             .lines()
             .joinToString("\n") { it.substringBefore("//") }

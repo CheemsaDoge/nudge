@@ -550,13 +550,9 @@
     <string name="daily_limit_label">"Limite quotidienne"</string>
     <string name="no_block_label">"Aucun blocage"</string>
     <string name="rule_limit_reached">"%1$s (limite atteinte)"</string>
-    <string name="import_rules">"Importer %1$s règle(s)"</string>
-    <string name="import_groups">" et %1$s groupe(s)"</string>
     <string name="import_duplicates_note">" ?\n\nLes règles en double seront ignorées."</string>
-    <string name="import_history">"\n\nContient %1$s événement(s) d’historique (%2$s nouveaux)."</string>
     <string name="import_left_out">" et seront exclus :"</string>
     <string name="import_replace_settings">"\n\nRestaure aussi les réglages de l’application, en remplaçant ceux de cet appareil."</string>
-    <string name="imported_rules">"Importation : %1$s règle(s)"</string>
     <string name="imported_groups">"\nGroupes créés : %1$s"</string>
     <string name="imported_duplicates">"\nIgnorés (doublons) : %1$s"</string>
     <string name="imported_history">"\n\nÉvénements d’historique restaurés : %1$s"</string>

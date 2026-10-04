@@ -1,6 +1,12 @@
 package com.astraedus.nudge.service
 
 import android.content.Context
+import android.content.res.Resources
+import androidx.core.content.ContextCompat
+import com.astraedus.nudge.R
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
+import org.junit.After
 import android.view.WindowManager
 import com.astraedus.nudge.domain.events.ForegroundSignal
 import com.astraedus.nudge.domain.surfaces.InstagramSurfaces
@@ -51,10 +57,21 @@ class TabCoverOverlayManagerTest {
 
     @Before
     fun setUp() {
+        mockkStatic(ContextCompat::class)
+        every { ContextCompat.getContextForLanguage(serviceContext) } returns serviceContext
+        val resources = mockk<Resources>()
+        every { serviceContext.resources } returns resources
+        every { coverView.context } returns serviceContext
+        every { resources.getString(R.string.cover_blocked) } returns "Blocked by Nudge"
+        every { resources.getString(R.string.cover_feature_blocked, reelsLabel) } returns "$reelsLabel blocked by Nudge"
         every { serviceContext.getSystemService(Context.WINDOW_SERVICE) } returns windowManager
         manager = TabCoverOverlayManager(mockk(relaxed = true), mockk<NudgeLogger>(relaxed = true))
         manager.coverViewFactory = { coverView }
         manager.setServiceContext(serviceContext)
+    }
+
+    @After fun clearResourceContextMock() {
+        unmockkStatic(ContextCompat::class)
     }
 
     private fun show(placement: TabCoverPlacement = clipsTab, label: String = reelsLabel) {
@@ -188,7 +205,7 @@ class TabCoverOverlayManagerTest {
 
         val spoken = description.captured.toString()
         assertTrue("the description must not be empty", spoken.isNotBlank())
-        assertTrue("it must name what was covered, got '$spoken'", spoken.contains(reelsLabel))
+        assertEquals("$reelsLabel blocked by Nudge", spoken)
         verify { coverView.setBackgroundColor(navColor) }
         verify { coverView.isClickable = true }
     }

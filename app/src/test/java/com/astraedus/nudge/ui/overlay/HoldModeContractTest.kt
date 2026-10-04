@@ -1,5 +1,6 @@
 package com.astraedus.nudge.ui.overlay
 
+import com.astraedus.nudge.ui.localization.resolveEnglishResourceCalls
 import com.astraedus.nudge.domain.model.BlockMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -35,7 +36,7 @@ class HoldModeContractTest {
     private fun read(relativePath: String): String {
         val file = File(sourceRoot(), relativePath)
         assertTrue("$relativePath must exist", file.exists())
-        return file.readText()
+        return resolveEnglishResourceCalls(file.readText())
     }
 
     /**

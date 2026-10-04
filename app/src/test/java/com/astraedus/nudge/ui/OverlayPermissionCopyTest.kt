@@ -1,5 +1,6 @@
 package com.astraedus.nudge.ui
 
+import com.astraedus.nudge.ui.localization.resolveEnglishResourceCalls
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -27,8 +28,8 @@ import java.io.File
  *
  * ## Why a source-grep test, not a Compose UI test
  * Both screens are large, hand-styled Composables with no test tags on this copy, and Settings'
- * description is a plain conditional expression, not a resource lookup — there is nothing here a
- * Robolectric or instrumented render would check more cheaply than reading the literal string. This
+ * description branches on live permission state. The source scan resolves referenced English
+ * resources before inspecting that copy; it still checks the actual conditional branch and text. This
  * follows the same shape as `ProtectionAlertCopyTest` (service copy) and `MonitorServiceContractTest`
  * (service shape): assert on the properties of the real source text.
  *
@@ -53,7 +54,7 @@ class OverlayPermissionCopyTest {
     private fun read(relativePath: String): String {
         val file = File(sourceRoot(), relativePath)
         assertTrue("$relativePath must exist", file.exists())
-        return file.readText()
+        return resolveEnglishResourceCalls(file.readText())
     }
 
     private val onboardingSource by lazy {

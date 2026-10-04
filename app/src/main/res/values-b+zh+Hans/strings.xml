@@ -550,13 +550,9 @@
     <string name="daily_limit_label">"每日限额"</string>
     <string name="no_block_label">"不拦截"</string>
     <string name="rule_limit_reached">"%1$s（已达上限）"</string>
-    <string name="import_rules">"导入 %1$s 条规则"</string>
-    <string name="import_groups">"和 %1$s 个分组"</string>
     <string name="import_duplicates_note">"？\n\n重复规则将跳过。"</string>
-    <string name="import_history">"\n\n包含 %1$s 条历史事件（%2$s 条新增）。"</string>
     <string name="import_left_out">"，将不予导入："</string>
     <string name="import_replace_settings">"\n\n也将恢复应用设置，替换本设备的设置。"</string>
-    <string name="imported_rules">"已导入：%1$s 条规则"</string>
     <string name="imported_groups">"\n已创建分组：%1$s"</string>
     <string name="imported_duplicates">"\n已跳过（重复）：%1$s"</string>
     <string name="imported_history">"\n\n已恢复历史事件：%1$s"</string>

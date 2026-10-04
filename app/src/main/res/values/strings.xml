@@ -177,7 +177,7 @@
     <string name="ui_subdomains_like_www_and_m_are_matched_automatically">Subdomains like www. and m. are matched automatically</string>
     <string name="ui_websites_use_the_same_block_mode_as_the_app">Websites use the same block mode as the app.</string>
     <string name="ui_website_block_mode">Website block mode</string>
-    <string name="ui_opens_normally_these_websites_are_still_blocked">%1$s opens normally; these websites are still blocked. </string>
+    <string name="ui_opens_normally_these_websites_are_still_blocked">"%1$s opens normally; these websites are still blocked. "</string>
     <string name="ui_default_behavior">Default Behavior</string>
     <string name="ui_these_settings_apply_whenever_no_scheduled_override_is_active">These settings apply whenever no scheduled override is active.</string>
     <string name="ui_block_the_whole_app">Block the whole app</string>
@@ -219,7 +219,7 @@
     <string name="ui_feature_overrides_during_schedule">Feature overrides during schedule</string>
     <string name="ui_remove_all_rules">Remove All Rules</string>
     <string name="ui_remove_all_rules_2">Remove all rules?</string>
-    <string name="ui_this_will_delete_all_rules_for">This will delete all rules for %1$s. </string>
+    <string name="ui_this_will_delete_all_rules_for">"This will delete all rules for %1$s. "</string>
     <string name="ui_the_app_will_no_longer_be_blocked">The app will no longer be blocked.</string>
     <string name="ui_remove">Remove</string>
     <string name="ui_more_info">More info</string>
@@ -412,7 +412,7 @@
     <string name="ui_escape_hatch">Escape Hatch</string>
     <string name="ui_daily_2_minute_pass">Daily 2-minute pass</string>
     <string name="ui_allow_one_2_minute_escape_a_day_shared_across_all_blocked_apps">Allow one 2-minute escape a day, shared across all blocked apps.</string>
-    <string name="ui_turning_it_on_requires_the_unlock_challenge"> Turning it on requires the unlock challenge.</string>
+    <string name="ui_turning_it_on_requires_the_unlock_challenge">" Turning it on requires the unlock challenge."</string>
     <string name="ui_personalize">Personalize</string>
     <string name="ui_edit_block_messages">Edit block messages</string>
     <string name="ui_customize_the_motivational_text_shown_on_block_and_delay_screens">Customize the motivational text shown on block and delay screens.</string>
@@ -499,6 +499,7 @@
     <string name="ui_streak">Streak</string>
     <string name="ui_walked_away_3">walked away</string>
     <string name="ui_no_data_this_week">No data this week</string>
+
 
 
 
@@ -597,13 +598,9 @@
     <string name="daily_limit_label">"Daily limit"</string>
     <string name="no_block_label">"No block"</string>
     <string name="rule_limit_reached">"%1$s (limit reached)"</string>
-    <string name="import_rules">"Import %1$s rule(s)"</string>
-    <string name="import_groups">" and %1$s group(s)"</string>
     <string name="import_duplicates_note">"?\n\nDuplicate rules will be skipped."</string>
-    <string name="import_history">"\n\nIncludes %1$s history event(s) (%2$s new)."</string>
     <string name="import_left_out">" and will be left out:"</string>
     <string name="import_replace_settings">"\n\nAlso restores app settings, replacing this device\'s."</string>
-    <string name="imported_rules">"Imported: %1$s rule(s)"</string>
     <string name="imported_groups">"\nGroups created: %1$s"</string>
     <string name="imported_duplicates">"\nSkipped (duplicates): %1$s"</string>
     <string name="imported_history">"\n\nHistory events restored: %1$s"</string>
