@@ -544,6 +544,8 @@
     <string name="duration_second">"%1$s s"</string>
     <string name="duration_under_minute">"&lt; 1 min"</string>
     <string name="duration_left">"%1$s restantes"</string>
+    <string name="auto_kick_cooldown">"Pause après la fermeture automatique"</string>
+    <string name="web_auto_kick_cooldown">"Pause après la fermeture automatique — %1$s"</string>
     <string name="import_rules">"Importer %1$s règle(s)"</string>
     <string name="import_groups">" et %1$s groupe(s)"</string>
     <string name="import_duplicates_note">" ?\n\nLes règles en double seront ignorées."</string>
@@ -566,6 +568,31 @@
     <string name="import_many_history_invalid">"%1$s événements d’historique sont illisibles"</string>
     <string name="import_one_setting_invalid">"1 réglage est illisible"</string>
     <string name="import_many_settings_invalid">"%1$s réglages sont illisibles"</string>
+    <string name="error_version_missing">"Champ de version absent ou invalide"</string>
+    <string name="error_version_newer">"La version %1$s de la sauvegarde est plus récente que la version prise en charge (%2$s). Mettez l’application à jour."</string>
+    <string name="error_invalid_json">"Format JSON invalide : %1$s"</string>
+    <string name="error_invalid_data">"Données invalides : %1$s"</string>
+    <string name="error_no_valid">"Aucune règle ni aucun groupe valide. Les %1$s entrées étaient invalides :"</string>
+    <string name="error_more">"…et %1$s autres"</string>
+    <string name="error_entry">"%1$s %2$s : %3$s"</string>
+    <string name="error_rule">"Règle"</string>
+    <string name="error_group">"Groupe"</string>
+    <string name="error_history">"Événement d’historique"</string>
+    <string name="error_setting">"Réglage %1$s : %2$s"</string>
+    <string name="error_unreadable">"lecture impossible"</string>
+    <string name="error_unknown_mode">"Mode de blocage inconnu : %1$s"</string>
+    <string name="error_challenge_range">"La longueur %1$s du code est hors de l’intervalle 1–%2$s"</string>
+    <string name="error_package_blank">"Le nom du paquet est vide"</string>
+    <string name="error_group_blank">"Le nom du groupe est vide"</string>
+    <string name="error_timestamp">"L’horodatage doit être une valeur positive en millisecondes depuis l’époque Unix"</string>
+    <string name="error_missing_text">"%1$s est absent ou n’est pas du texte"</string>
+    <string name="error_missing_number">"%1$s est absent ou n’est pas un nombre"</string>
+    <string name="error_field_type">"%1$s %2$s"</string>
+    <string name="error_not_boolean">"n’est ni true ni false"</string>
+    <string name="error_not_text">"n’est pas du texte"</string>
+    <string name="error_not_number">"n’est pas un nombre"</string>
+    <string name="error_not_array">"doit être un tableau"</string>
+    <string name="error_not_object">"doit être un objet"</string>
     <string-array name="delay_titles">
         <item>Prenez un instant pour réfléchir…</item>
         <item>Faites une pause et réfléchissez</item>
@@ -588,15 +615,31 @@
         <item>Vous avez fixé cette limite pour une raison</item>
     </string-array>
     <plurals name="ready_app_count">
-        <item quantity="one">%d application prête</item>
-        <item quantity="other">%d applications prêtes</item>
+        <item quantity="one">"%d application prête"</item>
+        <item quantity="other">"%d applications prêtes"</item>
     </plurals>
     <plurals name="app_count">
-        <item quantity="one">%d application</item>
-        <item quantity="other">%d applications</item>
+        <item quantity="one">"%d application"</item>
+        <item quantity="other">"%d applications"</item>
     </plurals>
     <plurals name="streak_days">
-        <item quantity="one">%d jour de suite</item>
-        <item quantity="other">%d jours de suite</item>
+        <item quantity="one">"%d jour de suite"</item>
+        <item quantity="other">"%d jours de suite"</item>
+    </plurals>
+    <plurals name="import_rule_count">
+        <item quantity="one">"Importer %1$s règle"</item>
+        <item quantity="other">"Importer %1$s règles"</item>
+    </plurals>
+    <plurals name="import_group_count">
+        <item quantity="one">" et %1$s groupe"</item>
+        <item quantity="other">" et %1$s groupes"</item>
+    </plurals>
+    <plurals name="import_history_count">
+        <item quantity="one">"\n\nContient %1$s événement d’historique (nouveaux : %2$s)."</item>
+        <item quantity="other">"\n\nContient %1$s événements d’historique (nouveaux : %2$s)."</item>
+    </plurals>
+    <plurals name="imported_rule_count">
+        <item quantity="one">"Importation : %1$s règle"</item>
+        <item quantity="other">"Importation : %1$s règles"</item>
     </plurals>
 </resources>

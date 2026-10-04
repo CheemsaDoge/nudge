@@ -2,6 +2,7 @@ package com.astraedus.nudge.ui.backup
 
 import com.astraedus.nudge.ui.localization.builtInCopy
 import com.astraedus.nudge.ui.localization.formatCopy
+import com.astraedus.nudge.ui.localization.importErrorCopy
 
 import com.astraedus.nudge.R
 
@@ -110,7 +111,7 @@ fun BackupDialogs(viewModel: BackupViewModel) {
         AlertDialog(
             onDismissRequest = { viewModel.cancelImport() },
             title = { Text(strings.getString(R.string.ui_import_backup)) },
-            text = { Text(buildImportPreviewMessage(preview, strings::formatCopy)) },
+            text = { Text(buildImportPreviewMessage(preview, { template, args -> if (args.isEmpty()) strings.importErrorCopy(template) else strings.formatCopy(template, args) })) },
             confirmButton = {
                 TextButton(onClick = { viewModel.confirmImport() }) {
                     Text(strings.getString(R.string.ui_import))
@@ -128,7 +129,7 @@ fun BackupDialogs(viewModel: BackupViewModel) {
         AlertDialog(
             onDismissRequest = { viewModel.clearImportOutcome() },
             title = { Text(strings.getString(R.string.ui_import_complete)) },
-            text = { Text(buildImportOutcomeMessage(outcome, strings::formatCopy)) },
+            text = { Text(buildImportOutcomeMessage(outcome, { template, args -> if (args.isEmpty()) strings.importErrorCopy(template) else strings.formatCopy(template, args) })) },
             confirmButton = {
                 TextButton(onClick = { viewModel.clearImportOutcome() }) {
                     Text(strings.getString(R.string.ui_ok))
@@ -141,7 +142,7 @@ fun BackupDialogs(viewModel: BackupViewModel) {
         AlertDialog(
             onDismissRequest = { viewModel.clearImportOutcome() },
             title = { Text(strings.getString(R.string.ui_import_failed)) },
-            text = { Text(strings.builtInCopy(error)) },
+            text = { Text(strings.importErrorCopy(error)) },
             confirmButton = {
                 TextButton(onClick = { viewModel.clearImportOutcome() }) {
                     Text(strings.getString(R.string.ui_ok))

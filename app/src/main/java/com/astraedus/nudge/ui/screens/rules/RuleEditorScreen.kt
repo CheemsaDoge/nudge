@@ -329,7 +329,7 @@ fun RuleEditorScreen(
                             onClick = { showDailyLimitDialog = true },
                             label = {
                                 Text(
-                                    if (isCustomDaily) formatMinutesDisplay(state.dailyLimitMinutes)
+                                    if (isCustomDaily) strings.durationLabel(formatMinutesDisplay(state.dailyLimitMinutes))
                                     else strings.getString(R.string.ui_custom)
                                 )
                             }

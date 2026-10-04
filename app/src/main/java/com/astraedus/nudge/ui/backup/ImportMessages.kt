@@ -22,11 +22,11 @@ private const val MAX_LISTED_REASONS = 3
  */
 fun buildImportPreviewMessage(preview: ImportPreview, copy: CopyText = ::englishCopy): String = buildString {
     val result = preview.result
-    append(copy("Import %1$s rule(s)", listOf(result.rules.size)))
-    if (result.groups.isNotEmpty()) append(copy(" and %1$s group(s)", listOf(result.groups.size)))
+    append(copy("Import %1\$s rule(s)", listOf(result.rules.size)))
+    if (result.groups.isNotEmpty()) append(copy(" and %1\$s group(s)", listOf(result.groups.size)))
     append(copy("?\n\nDuplicate rules will be skipped.", listOf()))
     if (result.history.isNotEmpty()) {
-        append(copy("\n\nIncludes %1$s history event(s) (%2$s new).", listOf(result.history.size, preview.newHistoryCount)))
+        append(copy("\n\nIncludes %1\$s history event(s) (%2\$s new).", listOf(result.history.size, preview.newHistoryCount)))
     }
     if (result.invalidCount > 0) {
         append(copy("\n\n", listOf()))
@@ -55,24 +55,24 @@ fun buildImportPreviewMessage(preview: ImportPreview, copy: CopyText = ::english
 
 /** Body text of the "Import Complete" dialog. */
 fun buildImportOutcomeMessage(outcome: ImportOutcome, copy: CopyText = ::englishCopy): String = buildString {
-    append(copy("Imported: %1$s rule(s)", listOf(outcome.importedCount)))
-    if (outcome.groupsCreated > 0) append(copy("\nGroups created: %1$s", listOf(outcome.groupsCreated)))
-    if (outcome.duplicateCount > 0) append(copy("\nSkipped (duplicates): %1$s", listOf(outcome.duplicateCount)))
+    append(copy("Imported: %1\$s rule(s)", listOf(outcome.importedCount)))
+    if (outcome.groupsCreated > 0) append(copy("\nGroups created: %1\$s", listOf(outcome.groupsCreated)))
+    if (outcome.duplicateCount > 0) append(copy("\nSkipped (duplicates): %1\$s", listOf(outcome.duplicateCount)))
     if (outcome.hasHistory) {
-        append(copy("\n\nHistory events restored: %1$s", listOf(outcome.historyImportedCount)))
+        append(copy("\n\nHistory events restored: %1\$s", listOf(outcome.historyImportedCount)))
         if (outcome.historyDuplicateCount > 0) {
-            append(copy("\nHistory already present: %1$s", listOf(outcome.historyDuplicateCount)))
+            append(copy("\nHistory already present: %1\$s", listOf(outcome.historyDuplicateCount)))
         }
         if (outcome.historyInvalidCount > 0) {
-            append(copy("\nHistory could not be read: %1$s", listOf(outcome.historyInvalidCount)))
+            append(copy("\nHistory could not be read: %1\$s", listOf(outcome.historyInvalidCount)))
         }
     }
     if (outcome.settingsApplied) append(copy("\n\nApp settings restored", listOf()))
     if (outcome.settingsInvalidCount > 0) {
-        append(copy("\nSettings that could not be read: %1$s", listOf(outcome.settingsInvalidCount)))
+        append(copy("\nSettings that could not be read: %1\$s", listOf(outcome.settingsInvalidCount)))
     }
     if (outcome.invalidCount > 0) {
-        append(copy("\n\nSkipped (could not be read): %1$s", listOf(outcome.invalidCount)))
+        append(copy("\n\nSkipped (could not be read): %1\$s", listOf(outcome.invalidCount)))
         appendReasons(outcome.invalidReasons, copy)
     }
 }
@@ -87,18 +87,18 @@ private val ImportOutcome.hasHistory: Boolean
 private fun StringBuilder.appendReasons(reasons: List<String>, copy: CopyText) {
     reasons.take(MAX_LISTED_REASONS).forEach { append("\n• ${copy(it, emptyList())}") }
     val extra = reasons.size - MAX_LISTED_REASONS
-    if (extra > 0) append(copy("\n• ...and %1$s more", listOf(extra)))
+    if (extra > 0) append(copy("\n• ...and %1\$s more", listOf(extra)))
 }
 
 private fun entriesCouldNotBeRead(count: Int, copy: CopyText): String =
-    if (count == 1) copy("1 entry could not be read", listOf()) else copy("%1$s entries could not be read", listOf(count))
+    if (count == 1) copy("1 entry could not be read", listOf()) else copy("%1\$s entries could not be read", listOf(count))
 
 private fun historyEntriesCouldNotBeRead(count: Int, copy: CopyText): String =
     if (count == 1) copy("1 history event could not be read", listOf())
-    else copy("%1$s history events could not be read", listOf(count))
+    else copy("%1\$s history events could not be read", listOf(count))
 
 private fun settingsCouldNotBeRead(count: Int, copy: CopyText): String =
-    if (count == 1) copy("1 setting could not be read", listOf()) else copy("%1$s settings could not be read", listOf(count))
+    if (count == 1) copy("1 setting could not be read", listOf()) else copy("%1\$s settings could not be read", listOf(count))
 
 /** Templates and argument lists are stable; Android supplies a resource-backed formatter. */
 typealias CopyText = (String, List<Any>) -> String

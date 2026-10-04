@@ -544,6 +544,8 @@
     <string name="duration_second">"%1$s 秒"</string>
     <string name="duration_under_minute">"不足 1 分钟"</string>
     <string name="duration_left">"剩余 %1$s"</string>
+    <string name="auto_kick_cooldown">"自动退出冷却期"</string>
+    <string name="web_auto_kick_cooldown">"自动退出冷却期 — %1$s"</string>
     <string name="import_rules">"导入 %1$s 条规则"</string>
     <string name="import_groups">"和 %1$s 个分组"</string>
     <string name="import_duplicates_note">"？\n\n重复规则将跳过。"</string>
@@ -566,6 +568,31 @@
     <string name="import_many_history_invalid">"有 %1$s 条历史事件无法读取"</string>
     <string name="import_one_setting_invalid">"有 1 项设置无法读取"</string>
     <string name="import_many_settings_invalid">"有 %1$s 项设置无法读取"</string>
+    <string name="error_version_missing">"版本字段无效或缺失"</string>
+    <string name="error_version_newer">"备份版本 %1$s 高于当前支持的版本（%2$s），请更新应用。"</string>
+    <string name="error_invalid_json">"JSON 格式无效：%1$s"</string>
+    <string name="error_invalid_data">"数据无效：%1$s"</string>
+    <string name="error_no_valid">"未找到有效的规则或分组，全部 %1$s 个条目均无效："</string>
+    <string name="error_more">"……另有 %1$s 项"</string>
+    <string name="error_entry">"%1$s %2$s：%3$s"</string>
+    <string name="error_rule">"规则"</string>
+    <string name="error_group">"分组"</string>
+    <string name="error_history">"历史事件"</string>
+    <string name="error_setting">"设置 %1$s：%2$s"</string>
+    <string name="error_unreadable">"无法读取"</string>
+    <string name="error_unknown_mode">"未知拦截模式：%1$s"</string>
+    <string name="error_challenge_range">"解锁码长度 %1$s 超出 1–%2$s 的范围"</string>
+    <string name="error_package_blank">"包名为空"</string>
+    <string name="error_group_blank">"分组名称为空"</string>
+    <string name="error_timestamp">"时间戳必须为正数，单位为自 Unix 纪元起的毫秒"</string>
+    <string name="error_missing_text">"%1$s 缺失或不是文本"</string>
+    <string name="error_missing_number">"%1$s 缺失或不是数字"</string>
+    <string name="error_field_type">"%1$s %2$s"</string>
+    <string name="error_not_boolean">"不是 true 或 false"</string>
+    <string name="error_not_text">"不是文本"</string>
+    <string name="error_not_number">"不是数字"</string>
+    <string name="error_not_array">"必须为数组"</string>
+    <string name="error_not_object">"必须为对象"</string>
     <string-array name="delay_titles">
         <item>花点时间想一想……</item>
         <item>暂停一下，反思片刻</item>
@@ -588,15 +615,31 @@
         <item>你设下这条界限，是有原因的</item>
     </string-array>
     <plurals name="ready_app_count">
-        <item quantity="one">%d 个应用已就绪</item>
-        <item quantity="other">%d 个应用已就绪</item>
+        <item quantity="one">"%d 个应用已就绪"</item>
+        <item quantity="other">"%d 个应用已就绪"</item>
     </plurals>
     <plurals name="app_count">
-        <item quantity="one">%d 个应用</item>
-        <item quantity="other">%d 个应用</item>
+        <item quantity="one">"%d 个应用"</item>
+        <item quantity="other">"%d 个应用"</item>
     </plurals>
     <plurals name="streak_days">
-        <item quantity="one">连续 %d 天</item>
-        <item quantity="other">连续 %d 天</item>
+        <item quantity="one">"连续 %d 天"</item>
+        <item quantity="other">"连续 %d 天"</item>
+    </plurals>
+    <plurals name="import_rule_count">
+        <item quantity="one">"导入 %1$s 条规则"</item>
+        <item quantity="other">"导入 %1$s 条规则"</item>
+    </plurals>
+    <plurals name="import_group_count">
+        <item quantity="one">"和 %1$s 个分组"</item>
+        <item quantity="other">"和 %1$s 个分组"</item>
+    </plurals>
+    <plurals name="import_history_count">
+        <item quantity="one">"\n\n包含 %1$s 条历史事件（%2$s 条新增）。"</item>
+        <item quantity="other">"\n\n包含 %1$s 条历史事件（%2$s 条新增）。"</item>
+    </plurals>
+    <plurals name="imported_rule_count">
+        <item quantity="one">"已导入：%1$s 条规则"</item>
+        <item quantity="other">"已导入：%1$s 条规则"</item>
     </plurals>
 </resources>

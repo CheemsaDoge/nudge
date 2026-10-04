@@ -155,6 +155,7 @@ private fun AppRuleCard(
     onToggle: () -> Unit,
     onClick: () -> Unit
 ) {
+    val strings = LocalContext.current.resources
     Card(
         modifier = Modifier
             .fillMaxWidth()

@@ -503,6 +503,8 @@
 
 
 
+
+
     <!-- Locale additions. All language packs are available offline. -->
     <string name="language_title">"Language"</string>
     <string name="language_system">"System default"</string>
@@ -588,6 +590,8 @@
     <string name="duration_second">"%1$s s"</string>
     <string name="duration_under_minute">"&lt; 1 min"</string>
     <string name="duration_left">"%1$s left"</string>
+    <string name="auto_kick_cooldown">"Auto-kick cooldown"</string>
+    <string name="web_auto_kick_cooldown">"Auto-kick cooldown — %1$s"</string>
     <string name="import_rules">"Import %1$s rule(s)"</string>
     <string name="import_groups">" and %1$s group(s)"</string>
     <string name="import_duplicates_note">"?\n\nDuplicate rules will be skipped."</string>
@@ -610,6 +614,31 @@
     <string name="import_many_history_invalid">"%1$s history events could not be read"</string>
     <string name="import_one_setting_invalid">"1 setting could not be read"</string>
     <string name="import_many_settings_invalid">"%1$s settings could not be read"</string>
+    <string name="error_version_missing">"Invalid or missing version field"</string>
+    <string name="error_version_newer">"Export version %1$s is newer than supported (%2$s). Please update the app."</string>
+    <string name="error_invalid_json">"Invalid JSON format: %1$s"</string>
+    <string name="error_invalid_data">"Invalid data: %1$s"</string>
+    <string name="error_no_valid">"No valid rules or groups found. All %1$s entries were invalid:"</string>
+    <string name="error_more">"...and %1$s more"</string>
+    <string name="error_entry">"%1$s %2$s: %3$s"</string>
+    <string name="error_rule">"Rule"</string>
+    <string name="error_group">"Group"</string>
+    <string name="error_history">"History event"</string>
+    <string name="error_setting">"Setting %1$s: %2$s"</string>
+    <string name="error_unreadable">"could not be read"</string>
+    <string name="error_unknown_mode">"Unknown block mode: %1$s"</string>
+    <string name="error_challenge_range">"Challenge length %1$s is outside 1..%2$s"</string>
+    <string name="error_package_blank">"Package name is blank"</string>
+    <string name="error_group_blank">"Group name is blank"</string>
+    <string name="error_timestamp">"Timestamp is not a positive epoch-millisecond value"</string>
+    <string name="error_missing_text">"%1$s is missing or is not text"</string>
+    <string name="error_missing_number">"%1$s is missing or is not a number"</string>
+    <string name="error_field_type">"%1$s %2$s"</string>
+    <string name="error_not_boolean">"is not true or false"</string>
+    <string name="error_not_text">"is not text"</string>
+    <string name="error_not_number">"is not a number"</string>
+    <string name="error_not_array">"must be an array"</string>
+    <string name="error_not_object">"must be an object"</string>
     <string-array name="delay_titles">
         <item>Take a moment to think...</item>
         <item>Pause and reflect</item>
@@ -632,15 +661,31 @@
         <item>You set this boundary for a reason</item>
     </string-array>
     <plurals name="ready_app_count">
-        <item quantity="one">%d app ready</item>
-        <item quantity="other">%d apps ready</item>
+        <item quantity="one">"%d app ready"</item>
+        <item quantity="other">"%d apps ready"</item>
     </plurals>
     <plurals name="app_count">
-        <item quantity="one">%d app</item>
-        <item quantity="other">%d apps</item>
+        <item quantity="one">"%d app"</item>
+        <item quantity="other">"%d apps"</item>
     </plurals>
     <plurals name="streak_days">
-        <item quantity="one">%d day streak</item>
-        <item quantity="other">%d days streak</item>
+        <item quantity="one">"%d-day streak"</item>
+        <item quantity="other">"%d-day streak"</item>
+    </plurals>
+    <plurals name="import_rule_count">
+        <item quantity="one">"Import %1$s rule"</item>
+        <item quantity="other">"Import %1$s rules"</item>
+    </plurals>
+    <plurals name="import_group_count">
+        <item quantity="one">" and %1$s group"</item>
+        <item quantity="other">" and %1$s groups"</item>
+    </plurals>
+    <plurals name="import_history_count">
+        <item quantity="one">"\n\nIncludes %1$s history event (%2$s new)."</item>
+        <item quantity="other">"\n\nIncludes %1$s history events (%2$s new)."</item>
+    </plurals>
+    <plurals name="imported_rule_count">
+        <item quantity="one">"Imported: %1$s rule"</item>
+        <item quantity="other">"Imported: %1$s rules"</item>
     </plurals>
 </resources>

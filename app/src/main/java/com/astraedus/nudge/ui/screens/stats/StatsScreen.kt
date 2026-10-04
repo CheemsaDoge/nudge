@@ -490,6 +490,7 @@ private fun InsightEntryCard(
 
 @Composable
 private fun UsageBar(stat: AppUsageStat, modifier: Modifier = Modifier) {
+    val strings = LocalContext.current.resources
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(4.dp)

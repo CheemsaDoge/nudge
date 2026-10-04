@@ -237,6 +237,7 @@ private fun ModeLegend(
     calculator: InsightsCalculator,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalContext.current.resources
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -268,6 +269,7 @@ private fun InterventionAppRowItem(
     calculator: InsightsCalculator,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalContext.current.resources
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(6.dp)

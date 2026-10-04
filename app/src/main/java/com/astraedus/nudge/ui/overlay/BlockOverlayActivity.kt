@@ -1,5 +1,7 @@
 package com.astraedus.nudge.ui.overlay
 
+import com.astraedus.nudge.R
+
 import android.content.Intent
 import android.os.Bundle
 import android.os.Handler

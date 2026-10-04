@@ -1,5 +1,7 @@
 package com.astraedus.nudge.ui.lock
 
+import com.astraedus.nudge.R
+
 import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity

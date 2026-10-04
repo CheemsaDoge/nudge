@@ -412,7 +412,7 @@ class NudgeMonitorService : Service() {
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description =
-                    ContextCompat.getContextForLanguage(this).getString(com.astraedus.nudge.R.string.notification_channel_description)
+                    ContextCompat.getContextForLanguage(this@NudgeMonitorService).getString(com.astraedus.nudge.R.string.notification_channel_description)
                 setShowBadge(false)
             }
         )

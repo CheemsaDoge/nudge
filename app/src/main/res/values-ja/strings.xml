@@ -544,6 +544,8 @@
     <string name="duration_second">"%1$s 秒"</string>
     <string name="duration_under_minute">"1 分未満"</string>
     <string name="duration_left">"残り %1$s"</string>
+    <string name="auto_kick_cooldown">"自動終了のクールダウン"</string>
+    <string name="web_auto_kick_cooldown">"自動終了のクールダウン — %1$s"</string>
     <string name="import_rules">"%1$s 件のルールをインポート"</string>
     <string name="import_groups">"と %1$s 個のグループ"</string>
     <string name="import_duplicates_note">"しますか？\n\n重複するルールはスキップします。"</string>
@@ -566,6 +568,31 @@
     <string name="import_many_history_invalid">"%1$s 件の履歴イベントを読み取れませんでした"</string>
     <string name="import_one_setting_invalid">"1 件の設定を読み取れませんでした"</string>
     <string name="import_many_settings_invalid">"%1$s 件の設定を読み取れませんでした"</string>
+    <string name="error_version_missing">"バージョン項目が無効または欠落しています"</string>
+    <string name="error_version_newer">"バックアップのバージョン %1$s は対応バージョン（%2$s）より新しいため、アプリを更新してください。"</string>
+    <string name="error_invalid_json">"JSON 形式が無効です：%1$s"</string>
+    <string name="error_invalid_data">"データが無効です：%1$s"</string>
+    <string name="error_no_valid">"有効なルールやグループがありません。%1$s 件すべてが無効でした："</string>
+    <string name="error_more">"…ほか %1$s 件"</string>
+    <string name="error_entry">"%1$s %2$s：%3$s"</string>
+    <string name="error_rule">"ルール"</string>
+    <string name="error_group">"グループ"</string>
+    <string name="error_history">"履歴イベント"</string>
+    <string name="error_setting">"設定 %1$s：%2$s"</string>
+    <string name="error_unreadable">"読み取れませんでした"</string>
+    <string name="error_unknown_mode">"不明なブロックモード：%1$s"</string>
+    <string name="error_challenge_range">"解除コードの長さ %1$s は 1～%2$s の範囲外です"</string>
+    <string name="error_package_blank">"パッケージ名が空です"</string>
+    <string name="error_group_blank">"グループ名が空です"</string>
+    <string name="error_timestamp">"タイムスタンプは Unix エポックからの正のミリ秒値である必要があります"</string>
+    <string name="error_missing_text">"%1$s が欠落しているか、文字列ではありません"</string>
+    <string name="error_missing_number">"%1$s が欠落しているか、数値ではありません"</string>
+    <string name="error_field_type">"%1$s %2$s"</string>
+    <string name="error_not_boolean">"true または false ではありません"</string>
+    <string name="error_not_text">"文字列ではありません"</string>
+    <string name="error_not_number">"数値ではありません"</string>
+    <string name="error_not_array">"配列である必要があります"</string>
+    <string name="error_not_object">"オブジェクトである必要があります"</string>
     <string-array name="delay_titles">
         <item>少し考えてみましょう…</item>
         <item>ひと休みして考える</item>
@@ -588,15 +615,31 @@
         <item>この境界を設けたのには理由があります</item>
     </string-array>
     <plurals name="ready_app_count">
-        <item quantity="one">%d 個のアプリが準備済み</item>
-        <item quantity="other">%d 個のアプリが準備済み</item>
+        <item quantity="one">"%d 個のアプリが準備済み"</item>
+        <item quantity="other">"%d 個のアプリが準備済み"</item>
     </plurals>
     <plurals name="app_count">
-        <item quantity="one">%d 個のアプリ</item>
-        <item quantity="other">%d 個のアプリ</item>
+        <item quantity="one">"%d 個のアプリ"</item>
+        <item quantity="other">"%d 個のアプリ"</item>
     </plurals>
     <plurals name="streak_days">
-        <item quantity="one">%d 日連続</item>
-        <item quantity="other">%d 日連続</item>
+        <item quantity="one">"%d 日連続"</item>
+        <item quantity="other">"%d 日連続"</item>
+    </plurals>
+    <plurals name="import_rule_count">
+        <item quantity="one">"%1$s 件のルールをインポート"</item>
+        <item quantity="other">"%1$s 件のルールをインポート"</item>
+    </plurals>
+    <plurals name="import_group_count">
+        <item quantity="one">"と %1$s 個のグループ"</item>
+        <item quantity="other">"と %1$s 個のグループ"</item>
+    </plurals>
+    <plurals name="import_history_count">
+        <item quantity="one">"\n\n履歴イベント %1$s 件（新規 %2$s 件）を含みます。"</item>
+        <item quantity="other">"\n\n履歴イベント %1$s 件（新規 %2$s 件）を含みます。"</item>
+    </plurals>
+    <plurals name="imported_rule_count">
+        <item quantity="one">"インポート済み：ルール %1$s 件"</item>
+        <item quantity="other">"インポート済み：ルール %1$s 件"</item>
     </plurals>
 </resources>

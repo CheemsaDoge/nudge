@@ -1,5 +1,9 @@
 package com.astraedus.nudge.service
 
+import androidx.core.content.ContextCompat
+import com.astraedus.nudge.R
+import com.astraedus.nudge.ui.localization.builtInCopy
+
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -1640,7 +1644,7 @@ class NudgeAccessibilityService : AccessibilityService() {
                 putExtra(BlockOverlayActivity.EXTRA_BLOCK_MODE, "DELAY")
                 putExtra(BlockOverlayActivity.EXTRA_DELAY_SECONDS, remainingSeconds)
                 putExtra(BlockOverlayActivity.EXTRA_PACKAGE_NAME, packageName)
-                putExtra(BlockOverlayActivity.EXTRA_RULE_NAME, "Auto-kick cooldown")
+                putExtra(BlockOverlayActivity.EXTRA_RULE_NAME, ContextCompat.getContextForLanguage(this@NudgeAccessibilityService).getString(R.string.auto_kick_cooldown))
             }
             return true
         }
@@ -1915,7 +1919,7 @@ class NudgeAccessibilityService : AccessibilityService() {
             // Named with the site, not just "Auto-kick cooldown": the overlay's app label resolves
             // to the BROWSER here (it is the package we are blocking re-entry to), and "Chrome" on
             // its own would not tell the user which site they were just removed from.
-            putExtra(BlockOverlayActivity.EXTRA_RULE_NAME, "Auto-kick cooldown — $domain")
+            putExtra(BlockOverlayActivity.EXTRA_RULE_NAME, ContextCompat.getContextForLanguage(this@NudgeAccessibilityService).getString(R.string.web_auto_kick_cooldown, domain))
         }
         // True regardless of whether the overlay was actually shown: the cooldown IS in force, so
         // evaluation must stop either way. Falling through to a rule lookup because the gate
@@ -2499,7 +2503,7 @@ class NudgeAccessibilityService : AccessibilityService() {
      */
     private fun coverLabel(featureKey: String?): String {
         val feature = InAppDetector.Feature.entries.firstOrNull { it.key == featureKey }
-        return "${feature?.displayName ?: "This tab"} blocked by $ownAppLabel"
+        return feature?.displayName?.let { ContextCompat.getContextForLanguage(this).resources.builtInCopy(it) }.orEmpty()
     }
 
     /**
