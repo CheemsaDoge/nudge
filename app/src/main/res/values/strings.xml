@@ -95,13 +95,13 @@
     <string name="ui_doesn_t_match">Doesn\'t match</string>
     <string name="ui_i_changed_my_mind">I changed my mind</string>
     <string name="ui_value">Value (%1$s)</string>
-    <string name="ui_enter_a_number_between_and">Enter a number between %1$s and %2$s</string>
+    <string name="ui_enter_a_number_between_and">Enter a number between %1$d and %2$d</string>
     <string name="ui_set">Set</string>
     <string name="ui_min">min</string>
     <string name="ui_off">Off</string>
-    <string name="ui_enter_1_minutes_or_leave_blank_for_off">Enter 1-%1$s minutes, or leave blank for off</string>
+    <string name="ui_enter_1_minutes_or_leave_blank_for_off">Enter 1-%1$d minutes, or leave blank for off</string>
     <string name="ui_emergency_end_nuke">Emergency: end Nuke</string>
-    <string name="ui_no_code_on_you_type_all_characters_below_exactly_every_attempt_gets_a">%1$s. No code on you? Type all %2$s characters below, exactly. Every attempt gets a new one.</string>
+    <string name="ui_no_code_on_you_type_all_characters_below_exactly_every_attempt_gets_a">%1$s. No code on you? Type all %2$d characters below, exactly. Every attempt gets a new one.</string>
     <string name="ui_end_it">End it</string>
     <string name="ui_nuke_is_on">Nuke is on</string>
     <string name="ui_that_needs_your_nuke_code_go_and_get_it_and_scan_it_here">%1$s? That needs your Nuke code. Go and get it, and scan it here.</string>
@@ -113,7 +113,7 @@
     <string name="ui_left_today">%1$s left today</string>
     <string name="ui_breathe_in">Breathe in...</string>
     <string name="ui_breathe_out">Breathe out...</string>
-    <string name="ui_s_remaining">%1$ss remaining</string>
+    <string name="ui_s_remaining">%1$ds remaining</string>
     <string name="ui_rule">Rule: %1$s</string>
     <string name="ui_use_for_2_minutes_once_a_day">Use for 2 minutes · once a day</string>
     <string name="ui_daily_pass_used_next_in">Daily pass used · next in %1$s</string>
@@ -121,8 +121,8 @@
     <string name="ui_app_blocked">App Blocked</string>
     <string name="ui_daily_limit_reached">Daily limit reached</string>
     <string name="ui_go_back">Go Back</string>
-    <string name="ui_hold_to_open_press_and_hold_for_seconds_let_go_and_it_starts_over">Hold to open. Press and hold for %1$s seconds. Let go and it starts over.</string>
-    <string name="ui_open_after_seconds">Open after %1$s seconds</string>
+    <string name="ui_hold_to_open_press_and_hold_for_seconds_let_go_and_it_starts_over">Hold to open. Press and hold for %1$d seconds. Let go and it starts over.</string>
+    <string name="ui_open_after_seconds">Open after %1$d seconds</string>
     <string name="ui_keep_holding">KEEP HOLDING</string>
     <string name="ui_hold_to_open_let_go_and_it_starts_over">Hold to open. Let go and it starts over.</string>
     <string name="ui_this_app">This app</string>
@@ -158,7 +158,7 @@
     <string name="ui_30m">30m</string>
     <string name="ui_1h">1h</string>
     <string name="ui_2h">2h</string>
-    <string name="ui_m">%1$sm</string>
+    <string name="ui_m">%1$dm</string>
     <string name="ui_custom">Custom</string>
     <string name="ui_custom_daily_limit">Custom Daily Limit</string>
     <string name="ui_minutes">minutes</string>
@@ -184,7 +184,7 @@
     <string name="ui_opening_triggers_the_block_below">Opening %1$s triggers the block below.</string>
     <string name="ui_opens_normally_only_the_features_you_turn_on_below_are_blocked">%1$s opens normally. Only the features you turn on below are blocked.</string>
     <string name="ui_opens_normally_any_daily_limit_below_still_applies">%1$s opens normally. Any daily limit below still applies.</string>
-    <string name="ui_s">%1$ss</string>
+    <string name="ui_s">%1$ds</string>
     <string name="ui_custom_2">Custom %1$s</string>
     <string name="ui_seconds">seconds</string>
     <string name="ui_auto_kick">Auto-kick</string>
@@ -192,7 +192,7 @@
     <string name="ui_the_time_trigger_also_covers_the_websites_below_each_site_gets_its_own">\n\nThe time trigger also covers the websites below -- each site gets its own timer and its own cooldown. The interaction trigger is app-only.</string>
     <string name="ui_whichever_trigger_fires_first_sends_you_to_the_home_screen">Whichever trigger fires first sends you to the home screen.</string>
     <string name="ui_after_n_interactions">After N interactions</string>
-    <string name="ui_after_interactions">After %1$s interactions</string>
+    <string name="ui_after_interactions">After %1$d interactions</string>
     <string name="ui_or_after_this_long_in_the_app">Or after this long in the app</string>
     <string name="ui_counts_foreground_time_in_one_session_leave_blank_for_off">Counts foreground time in one session. Leave blank for off.</string>
     <string name="ui_cooldown">Cooldown</string>
@@ -224,13 +224,13 @@
     <string name="ui_remove">Remove</string>
     <string name="ui_more_info">More info</string>
     <string name="ui_got_it">Got it</string>
-    <string name="ui_after_scrolls">After %1$s scrolls</string>
+    <string name="ui_after_scrolls">After %1$d scrolls</string>
     <string name="ui_app_groups">App Groups</string>
     <string name="ui_add_member">Add member</string>
     <string name="ui_add_group">Add group</string>
     <string name="ui_no_groups_yet">No groups yet</string>
     <string name="ui_tap_to_create_a_group">Tap + to create a group</string>
-    <string name="ui_apps">%1$s apps</string>
+    <string name="ui_apps">%1$d apps</string>
     <string name="ui_no_members">No members</string>
     <string name="ui_tap_the_add_button_to_add_apps">Tap the add button to add apps</string>
     <string name="ui_create_group">Create Group</string>
@@ -259,7 +259,7 @@
     <string name="ui_open_usage_stats">Open usage stats</string>
     <string name="ui_your_screen_time_and_nudges_will_chart_here_once_there_s_a_day_of_data">Your screen time and nudges will chart here once there\'s a day of data.</string>
     <string name="ui_nudges">Nudges</string>
-    <string name="ui_blocked_walked_away">%1$s blocked · %2$s walked away</string>
+    <string name="ui_blocked_walked_away">%1$d blocked · %2$d walked away</string>
     <string name="ui_set_up_a_no_way_around_it_list">Set up a no-way-around-it list</string>
     <string name="ui_nuke_is_on_2">Nuke is on · %1$s</string>
     <string name="ui_scan_your_code_to_end_it">Scan your code to end it</string>
@@ -349,7 +349,7 @@
     <string name="ui_auto_close_app">Auto-close app</string>
     <string name="ui_automatically_sends_you_to_the_home_screen_after_n_scrolls_taps_and_or">Automatically sends you to the home screen after N scrolls/taps and/or after a set amount of time in the app -- whichever happens first.\n\nThe interaction counter above must be on to kick by scrolls/taps. Kicking by time works either way.\n\nAfter an auto-close, the app is locked behind a cooldown delay before you can re-open it.\n\nThis is the nuclear option for stopping infinite scroll.</string>
     <string name="ui_sends_you_to_the_home_screen_whichever_trigger_fires_first_wins">Sends you to the home screen. Whichever trigger fires first wins.</string>
-    <string name="ui_after_scrolls_taps">After %1$s scrolls/taps</string>
+    <string name="ui_after_scrolls_taps">After %1$d scrolls/taps</string>
     <string name="ui_turn_on_the_interaction_counter_above_to_also_kick_after_n_scrolls_or">Turn on the interaction counter above to also kick after N scrolls or taps.</string>
     <string name="ui_grayscale_mode">Grayscale Mode</string>
     <string name="ui_makes_your_phone_screen_black_and_white_while_this_app_is_in_the_foreg">Makes your phone screen black-and-white while this app is in the foreground.\n\nColor is a major factor in making apps feel rewarding. Removing it makes scrolling feel less engaging.\n\nRequires a one-time setup -- check Settings for the guide.</string>
@@ -422,7 +422,7 @@
     <string name="ui_restore_from_a_backup_file_rules_you_already_have_are_left_alone">Restore from a backup file. Rules you already have are left alone.</string>
     <string name="ui_about">About</string>
     <string name="ui_version">Version</string>
-    <string name="ui_nudge_v_build">Nudge v%1$s (build %2$s)</string>
+    <string name="ui_nudge_v_build">Nudge v%1$s (build %2$d)</string>
     <string name="ui_developer_options_enabled">Developer options enabled</string>
     <string name="ui_source_code_feedback">Source Code &amp; Feedback</string>
     <string name="ui_open_source_on_github_report_bugs_or_suggest_features">Open source on GitHub. Report bugs or suggest features.</string>
@@ -467,7 +467,7 @@
     <string name="ui_next_day">Next day</string>
     <string name="ui_back_to_today">Back to today</string>
     <string name="ui_open">Open %1$s</string>
-    <string name="ui_you_walked_away_of_times">You walked away %1$s of %2$s times</string>
+    <string name="ui_you_walked_away_of_times">You walked away %1$d of %2$d times</string>
     <string name="ui_no_blocks_yet_in_this_period_that_is_a_clean_slate_not_a_failure">No blocks yet in this period — that is a clean slate, not a failure.</string>
     <string name="ui_time_reclaimed">Time Reclaimed</string>
     <string name="ui_estimated_from_your_average_session_length_in_each_app">Estimated from your average session length in each app.</string>
@@ -475,22 +475,22 @@
     <string name="ui_time_reclaimed_est">Time reclaimed (est.)</string>
     <string name="ui_some_apps_use_a_5_minute_default">Some apps use a 5-minute default.</string>
     <string name="ui_willpower_clock">Willpower Clock</string>
-    <string name="ui_of_walked_away">%1$s: %2$s of %3$s walked away (%4$s)</string>
+    <string name="ui_of_walked_away">%1$s: %2$d of %3$d walked away (%4$s)</string>
     <string name="ui_no_walk_aways_yet_in_this_period">No walk-aways yet in this period</string>
     <string name="ui_strongest_at_weakest_at">Strongest at %1$s · Weakest at %2$s</string>
     <string name="ui_strongest_at">Strongest at %1$s</string>
     <string name="ui_weakest_at">Weakest at %1$s</string>
     <string name="ui_not_enough_data_yet_to_spot_an_hourly_pattern">Not enough data yet to spot an hourly pattern.</string>
     <string name="ui_resistance_leaderboard">Resistance Leaderboard</string>
-    <string name="ui_walked_away_gave_in">%1$s walked away · %2$s gave in</string>
+    <string name="ui_walked_away_gave_in">%1$d walked away · %2$d gave in</string>
     <string name="ui_weekly_trend">Weekly Trend</string>
     <string name="ui_no_data_in_this_period">No data in this period</string>
-    <string name="ui_up_points_vs_last_week">Up %1$s points vs last week</string>
-    <string name="ui_down_points_vs_last_week">Down %1$s points vs last week</string>
+    <string name="ui_up_points_vs_last_week">Up %1$d points vs last week</string>
+    <string name="ui_down_points_vs_last_week">Down %1$d points vs last week</string>
     <string name="ui_level_with_last_week">Level with last week</string>
     <string name="ui_switch_to_30_days_to_see_your_weekly_trend">Switch to 30 days to see your weekly trend.</string>
     <string name="ui_no_nudges_yet">No nudges yet</string>
-    <string name="ui_blocked_walked_away_2">%1$s %2$s blocked %3$s walked away</string>
+    <string name="ui_blocked_walked_away_2">%1$s %2$d blocked %3$d walked away</string>
     <string name="ui_no_usage_recorded_today">No usage recorded today</string>
     <string name="ui_12am">12am</string>
     <string name="ui_6am">6am</string>
@@ -499,6 +499,7 @@
     <string name="ui_streak">Streak</string>
     <string name="ui_walked_away_3">walked away</string>
     <string name="ui_no_data_this_week">No data this week</string>
+
 
 
 
@@ -567,12 +568,12 @@
     <string name="yesterday">"Yesterday"</string>
     <string name="this_week">"This wk"</string>
     <string name="weeks_ago">"%1$s wk ago"</string>
-    <string name="hour_label">"%1$s:00"</string>
-    <string name="mode_duration">"%1$s %2$s s"</string>
-    <string name="rule_daily_limit">"%1$s min/day"</string>
-    <string name="rule_kick_interactions">"Auto-kick@%1$s"</string>
-    <string name="rule_kick_minutes">"Auto-kick@%1$s min"</string>
-    <string name="weekday_blocks">"%1$s: %2$s blocks"</string>
+    <string name="hour_label">"%1$d:00"</string>
+    <string name="mode_duration">"%1$s %2$d s"</string>
+    <string name="rule_daily_limit">"%1$d min/day"</string>
+    <string name="rule_kick_interactions">"Auto-kick@%1$d"</string>
+    <string name="rule_kick_minutes">"Auto-kick@%1$d min"</string>
+    <string name="weekday_blocks">"%1$s: %2$d blocks"</string>
     <string name="monitor_off">"Nudge is off"</string>
     <string name="monitor_not_blocking">"Nudge is not blocking"</string>
     <string name="monitor_active">"Nudge is active"</string>
@@ -582,7 +583,7 @@
     <string name="monitor_stopped">"Your phone stopped Nudge. Tap to turn accessibility off and on again."</string>
     <string name="cover_blocked">"Blocked by Nudge"</string>
     <string name="cover_feature_blocked">"%1$s blocked by Nudge"</string>
-    <string name="counter_today">"Today: %1$s"</string>
+    <string name="counter_today">"Today: %1$d"</string>
     <string name="counter_taps">"taps"</string>
     <string name="counter_scrolls">"scrolls"</string>
     <string name="counter_app">"app"</string>

@@ -29,7 +29,7 @@ fun Resources.generatedRuleName(raw: String?): String? {
     val qualifiers = qualified?.groupValues?.get(2)?.split(", ")?.map { qualifier ->
         if (qualifier == "scheduled") getString(R.string.scheduled)
         else Regex("([0-9]+) min/day").matchEntire(qualifier)?.let {
-            getString(R.string.rule_daily_limit, it.groupValues[1])
+            getString(R.string.rule_daily_limit, it.groupValues[1].toInt())
         } ?: qualifier
     }.orEmpty()
     val translated = (if (prefix.isEmpty()) mode else "$prefix – $mode") +
