@@ -1,5 +1,6 @@
 package com.astraedus.nudge.ui.overlay
 
+import com.astraedus.nudge.ui.localization.durationLabel
 import com.astraedus.nudge.R
 
 import androidx.compose.foundation.layout.Arrangement
@@ -81,7 +82,7 @@ fun HoldContent(
                 )
                 if (dailyTimeRemainingMs != null && dailyLimitMinutes != null && dailyLimitMinutes > 0) {
                     Text(
-                        text = strings.getString(R.string.ui_left_today, formatDuration(dailyTimeRemainingMs)),
+                        text = strings.getString(R.string.ui_left_today, strings.durationLabel(formatDuration(dailyTimeRemainingMs))),
                         style = MaterialTheme.typography.bodyMedium,
                         color = timeRemainingColor(dailyTimeRemainingMs, dailyLimitMinutes)
                     )

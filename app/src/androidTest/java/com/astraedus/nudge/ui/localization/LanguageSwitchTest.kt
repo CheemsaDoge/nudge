@@ -36,7 +36,13 @@ class LanguageSwitchTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val folder = File(instrumentation.targetContext.getExternalFilesDir(null), "language-screenshots").apply { mkdirs() }
         val bitmap = instrumentation.uiAutomation.takeScreenshot()
-        File(folder, "$tag.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        val file = File(folder, "$tag.png")
+        file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        // AGP uninstalls the app after connected tests, deleting its external-files directory.
+        // Shell-owned copies in Download survive until CI pulls them from this disposable emulator.
+        instrumentation.uiAutomation.executeShellCommand(
+            "cp ${file.absolutePath} /sdcard/Download/nudge-language-$tag.png"
+        ).use { descriptor -> android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor).readBytes() }
         bitmap.recycle()
     }
 

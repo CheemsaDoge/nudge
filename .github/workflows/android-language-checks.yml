@@ -57,7 +57,8 @@ jobs:
           disable-animations: true
           script: |
             ./gradlew connectedDebugAndroidTest
-            adb pull /sdcard/Android/data/dev.astraedus.nudge/files/language-screenshots app/build/outputs/language-screenshots
+            mkdir -p app/build/outputs/language-screenshots
+            for language in zh ja fr en; do adb pull /sdcard/Download/nudge-language-$language.png app/build/outputs/language-screenshots/; done
       - uses: actions/upload-artifact@v4
         if: always()
         with:

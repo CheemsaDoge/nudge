@@ -505,6 +505,7 @@
 
 
 
+
     <!-- Locale additions. All language packs are available offline. -->
     <string name="language_title">"Language"</string>
     <string name="language_system">"System default"</string>
@@ -592,6 +593,10 @@
     <string name="duration_left">"%1$s left"</string>
     <string name="auto_kick_cooldown">"Auto-kick cooldown"</string>
     <string name="web_auto_kick_cooldown">"Auto-kick cooldown — %1$s"</string>
+    <string name="restricted_content">"Restricted content"</string>
+    <string name="daily_limit_label">"Daily limit"</string>
+    <string name="no_block_label">"No block"</string>
+    <string name="rule_limit_reached">"%1$s (limit reached)"</string>
     <string name="import_rules">"Import %1$s rule(s)"</string>
     <string name="import_groups">" and %1$s group(s)"</string>
     <string name="import_duplicates_note">"?\n\nDuplicate rules will be skipped."</string>

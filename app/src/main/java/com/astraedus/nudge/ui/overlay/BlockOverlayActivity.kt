@@ -1,5 +1,6 @@
 package com.astraedus.nudge.ui.overlay
 
+import com.astraedus.nudge.ui.localization.generatedRuleName
 import com.astraedus.nudge.R
 
 import android.content.Intent
@@ -235,7 +236,7 @@ class BlockOverlayActivity : AppCompatActivity() {
         // launch us without pre-marking (the daily-limit HARD_BLOCK in TimeRemainingHandler) are
         // covered here too.
         NudgeAccessibilityService.markOverlayActive(packageName)
-        val ruleName = intent.getStringExtra(EXTRA_RULE_NAME)
+        val ruleName = resources.generatedRuleName(intent.getStringExtra(EXTRA_RULE_NAME))
         val dailyTimeRemainingMs = intent.getLongExtra(EXTRA_DAILY_TIME_REMAINING_MS, -1L)
             .let { if (it < 0) null else it }
         val dailyLimitMinutes = intent.getIntExtra(EXTRA_DAILY_LIMIT_MINUTES, -1)

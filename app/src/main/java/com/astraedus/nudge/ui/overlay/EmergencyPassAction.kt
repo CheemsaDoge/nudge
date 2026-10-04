@@ -1,5 +1,6 @@
 package com.astraedus.nudge.ui.overlay
 
+import com.astraedus.nudge.ui.localization.durationLabel
 import com.astraedus.nudge.R
 
 import androidx.compose.foundation.layout.Spacer
@@ -94,7 +95,7 @@ fun EmergencyPassAction(
             // rather than a hidden one, so the user knows the daily pass exists but is spent.
             TextButton(onClick = {}, enabled = false) {
                 Text(
-                    text = strings.getString(R.string.ui_daily_pass_used_next_in, formatDuration(nextPassMs)),
+                    text = strings.getString(R.string.ui_daily_pass_used_next_in, strings.durationLabel(formatDuration(nextPassMs))),
                     style = MaterialTheme.typography.bodySmall,
                     textAlign = TextAlign.Center
                 )

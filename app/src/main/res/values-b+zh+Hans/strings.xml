@@ -546,6 +546,10 @@
     <string name="duration_left">"剩余 %1$s"</string>
     <string name="auto_kick_cooldown">"自动退出冷却期"</string>
     <string name="web_auto_kick_cooldown">"自动退出冷却期 — %1$s"</string>
+    <string name="restricted_content">"受限内容"</string>
+    <string name="daily_limit_label">"每日限额"</string>
+    <string name="no_block_label">"不拦截"</string>
+    <string name="rule_limit_reached">"%1$s（已达上限）"</string>
     <string name="import_rules">"导入 %1$s 条规则"</string>
     <string name="import_groups">"和 %1$s 个分组"</string>
     <string name="import_duplicates_note">"？\n\n重复规则将跳过。"</string>
