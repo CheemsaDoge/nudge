@@ -1,0 +1,31 @@
+name: Android language checks
+on:
+  push:
+    branches: [feat/android-languages]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          validate-wrappers: false
+      - name: Tests, lint and debug APK
+        run: ./gradlew test lintDebug assembleDebug
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-language-checks
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/reports/tests/**
+            app/build/reports/lint-results-debug.*
+            app/build/test-results/**
