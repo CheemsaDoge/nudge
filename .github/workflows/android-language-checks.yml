@@ -55,7 +55,9 @@ jobs:
           api-level: ${{ matrix.api }}
           arch: x86_64
           disable-animations: true
-          script: ./gradlew connectedDebugAndroidTest
+          script: |
+            ./gradlew connectedDebugAndroidTest
+            adb pull /sdcard/Android/data/dev.astraedus.nudge/files/language-screenshots app/build/outputs/language-screenshots
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -63,3 +65,4 @@ jobs:
           path: |
             app/build/reports/androidTests/**
             app/build/outputs/androidTest-results/**
+            app/build/outputs/language-screenshots/**

@@ -1,5 +1,6 @@
 package com.astraedus.nudge.ui.screens.rules
 
+import androidx.compose.ui.platform.LocalContext
 import com.astraedus.nudge.ui.localization.ruleGroupSummary
 import com.astraedus.nudge.R
 

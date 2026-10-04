@@ -1,5 +1,6 @@
 package com.astraedus.nudge.ui.screens.stats
 
+import androidx.compose.ui.platform.LocalContext
 import com.astraedus.nudge.ui.localization.*
 
 import com.astraedus.nudge.R

@@ -9,8 +9,12 @@ import androidx.core.content.ContextCompat
 import androidx.test.platform.app.InstrumentationRegistry
 import com.astraedus.nudge.MainActivity
 import com.astraedus.nudge.R
-import com.astraedus.nudge.ui.screens.settings.LanguageSetting
+import com.astraedus.nudge.ui.screens.settings.SettingsScreen
 import com.astraedus.nudge.ui.theme.NudgeTheme
+import android.graphics.Bitmap
+import android.os.Build
+import java.io.File
+import org.junit.Before
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Rule
@@ -20,9 +24,25 @@ import org.junit.Test
 class LanguageSwitchTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
 
+    @Before fun grantNotificationsOnModernAndroid() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(
+                "pm grant dev.astraedus.nudge android.permission.POST_NOTIFICATIONS"
+            ).use { descriptor -> android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor).readBytes() }
+        }
+    }
+
+    private fun screenshot(tag: String) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val folder = File(instrumentation.targetContext.getExternalFilesDir(null), "language-screenshots").apply { mkdirs() }
+        val bitmap = instrumentation.uiAutomation.takeScreenshot()
+        File(folder, "$tag.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        bitmap.recycle()
+    }
+
     private fun showPicker() {
         compose.activityRule.scenario.onActivity { activity ->
-            activity.setContent { NudgeTheme { LanguageSetting() } }
+            activity.setContent { NudgeTheme { SettingsScreen(onNavigateBack = {}) } }
         }
         compose.waitForIdle()
         compose.onNodeWithText(compose.activity.getString(R.string.language_title)).performClick()
@@ -56,6 +76,9 @@ class LanguageSwitchTest {
             awaitLanguage(tag, title)
             compose.activityRule.scenario.recreate()
             awaitLanguage(tag, title)
+            showPicker()
+            screenshot(tag)
+            compose.onNodeWithText(compose.activity.getString(R.string.ui_cancel)).performClick()
             val context = InstrumentationRegistry.getInstrumentation().targetContext
             assertEquals(title, ContextCompat.getContextForLanguage(context).getString(R.string.language_title))
         }

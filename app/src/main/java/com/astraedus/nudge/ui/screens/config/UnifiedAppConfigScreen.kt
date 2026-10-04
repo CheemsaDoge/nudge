@@ -1,5 +1,6 @@
 package com.astraedus.nudge.ui.screens.config
 
+import com.astraedus.nudge.ui.localization.durationLabel
 import com.astraedus.nudge.ui.localization.builtInCopy
 
 import com.astraedus.nudge.R
