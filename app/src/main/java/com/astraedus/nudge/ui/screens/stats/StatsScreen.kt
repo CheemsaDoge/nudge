@@ -500,7 +500,7 @@ private fun UsageBar(stat: AppUsageStat, modifier: Modifier = Modifier) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                stat.appName,
+                if (stat.packageName == "web") strings.getString(R.string.websites) else stat.appName,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium
             )

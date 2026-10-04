@@ -285,14 +285,14 @@ private fun InterventionAppRowItem(
                 val bitmap = remember(icon) { icon.toBitmap(64, 64).asImageBitmap() }
                 Image(
                     bitmap = bitmap,
-                    contentDescription = row.label,
+                    contentDescription = if (row.packageName == "web") strings.getString(R.string.websites) else row.label,
                     modifier = Modifier.size(32.dp)
                 )
             } else {
                 Spacer(Modifier.size(32.dp))
             }
             Text(
-                row.label,
+                if (row.packageName == "web") strings.getString(R.string.websites) else row.label,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier.weight(1f)

@@ -240,12 +240,12 @@ private fun AppResistanceRow(row: WillpowerAppRow, modifier: Modifier = Modifier
                     val bitmap = remember(icon) { icon.toBitmap(32, 32).asImageBitmap() }
                     Image(
                         bitmap = bitmap,
-                        contentDescription = row.label,
+                        contentDescription = if (row.packageName == "web") strings.getString(R.string.websites) else row.label,
                         modifier = Modifier.size(32.dp)
                     )
                 }
                 Text(
-                    row.label,
+                    if (row.packageName == "web") strings.getString(R.string.websites) else row.label,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium
                 )
@@ -291,7 +291,7 @@ private fun WeeklyTrendSection(
                 } else {
                     (week.attempts.toFloat() / maxAttempts.toFloat()).coerceIn(0f, 1f)
                 },
-                readout = strings.getString(R.string.ui_of_walked_away, week.label, week.walkAways, week.attempts, calculator.formatPercent(week.rate))
+                readout = strings.getString(R.string.ui_of_walked_away, strings.weekLabel(week.label), week.walkAways, week.attempts, calculator.formatPercent(week.rate))
             )
         }
         RateBarChart(bars = bars, emptyMessage = strings.getString(R.string.ui_no_data_in_this_period))

@@ -169,7 +169,7 @@ private fun BlockedRow(
         if (icon != null) {
             Image(
                 provider = ImageProvider(icon),
-                contentDescription = app.label,
+                contentDescription = if (app.packageName == "web") context.getString(R.string.websites) else app.label,
                 contentScale = ContentScale.Fit,
                 modifier = GlanceModifier.size(ICON_SIZE)
             )
@@ -186,7 +186,7 @@ private fun BlockedRow(
         Spacer(modifier = GlanceModifier.width(ROW_GAP))
 
         Column(modifier = GlanceModifier.defaultWeight()) {
-            Text(text = app.label, style = bodyStyle(), maxLines = 1)
+            Text(text = if (app.packageName == "web") context.getString(R.string.websites) else app.label, style = bodyStyle(), maxLines = 1)
             Spacer(modifier = GlanceModifier.height(2.dp))
             // Track then fill, both absolute: the fill is barPercent of the track computed above.
             ProportionBar(

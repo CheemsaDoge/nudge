@@ -49,7 +49,7 @@ fun AppDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(state.appName.ifEmpty { strings.getString(R.string.ui_app_details) }) },
+                title = { Text(if (state.packageName == "web") strings.getString(R.string.websites) else state.appName.ifEmpty { strings.getString(R.string.ui_app_details) }) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.getString(R.string.ui_back))
